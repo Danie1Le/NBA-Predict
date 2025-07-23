@@ -1,0 +1,64 @@
+# 🏀 NBA Game Outcome Predictor
+
+A machine learning project that predicts the outcome of NBA games based on team-level performance statistics during the 2024–2025 season.
+
+---
+
+## 📌 Overview
+
+This project uses in-season NBA team data to train a classification model that predicts whether a team will win or lose a game. The dataset contains stats such as field goal percentage, assists, rebounds, and game results for each team and game throughout the season.
+
+The goal is **not** to predict future seasons (since rosters change), but to model how a team is performing over time and estimate the likely result of a game using stats **available up to that point**.
+
+---
+
+## 🧠 Key Features
+
+- **End-to-end ML pipeline**: Data cleaning, feature engineering, model training, evaluation, and visualization.
+- **Time-aware validation**: Ensures predictions use only stats prior to the game date.
+- **Model explainability**: Feature importance analysis to show which stats matter most for predicting wins.
+- **Interactive demo (optional)**: Predict outcomes between two teams and visualize key indicators.
+
+---
+
+## 📊 Dataset
+
+- Source: `NBA_GAMES.csv`  
+- Stats per game include:
+  - `FG_PCT`, `FG3_PCT`, `FT_PCT` (shooting efficiency)
+  - `AST`, `REB`, `MIN` (team activity)
+  - `WL`, `W`, `L`, `W_PCT`, `MATCHUP`, `GAME_DATE`, etc.
+
+---
+
+## ⚙️ Technologies Used
+
+- **Python 3.11**
+- **Pandas**, **NumPy** for data manipulation
+- **Scikit-learn**, **XGBoost** for modeling
+- **Matplotlib**, **Seaborn**, **Plotly** for visualization
+- **Jupyter Notebook** / **Streamlit** (for exploration or UI)
+- *(Optional)* Flask API or Docker for deployment
+
+---
+
+## 📁 Project Structure
+nba-outcome-predictor/
+│
+├── data/
+│ └── NBA_GAMES.csv
+│
+├── notebooks/
+│ └── EDA_and_Modeling.ipynb
+│
+├── src/
+│ ├── preprocessing.py
+│ ├── feature_engineering.py
+│ ├── train_model.py
+│ └── predict.py
+│
+├── app/
+│ └── streamlit_app.py
+│
+├── README.md
+└── requirements.txt
