@@ -1,12 +1,19 @@
-from src.preprocessing import load_and_clean_data
-from src.feature_engineering import create_features
-from src.train_model import train_model
-from src.predict import predict_outcome
+import sys
+import os
+
+# Add the parent directory to the Python path to enable imports
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from preprocessing import load_and_clean_data
+from feature_engineering import create_features
+from train_model import train_model
+from predict import predict_outcome
 from sklearn.metrics import accuracy_score, confusion_matrix, classification_report, roc_auc_score
 import matplotlib.pyplot as plt
 
-# 1. Load and clean data
-df = load_and_clean_data('Data/NBA_GAMES.csv')
+# 1. Load and clean data (adjust path for src directory)
+data_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'Data', 'NBA_GAMES.csv')
+df = load_and_clean_data(data_path)
 
 # 2. Feature engineering
 df = create_features(df)

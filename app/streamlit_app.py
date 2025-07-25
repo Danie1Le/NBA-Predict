@@ -1,6 +1,14 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
+import sys
+import os
+
+# Add the root directory to Python path for both direct running and Streamlit Cloud
+root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if root_dir not in sys.path:
+    sys.path.insert(0, root_dir)
+
 from src.preprocessing import load_and_clean_data
 from src.feature_engineering import create_features
 from src.train_model import train_model
@@ -466,7 +474,6 @@ def display_prediction(model, input_data, home_team, away_team):
 def main():
     # Header
     st.markdown('<h1 class="main-header">🏀 NBA Game Predictor</h1>', unsafe_allow_html=True)
-    st.markdown("### 🎯 **Improved Model** - 75% Validated Accuracy with Confidence Scores")
     st.markdown("*Predict NBA regular season outcomes using simplified features and regularized machine learning*")
     
     # Load all data
