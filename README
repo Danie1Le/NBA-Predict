@@ -17,13 +17,13 @@ The goal is **not** to predict future seasons (since rosters change), but to mod
 - **End-to-end ML pipeline**: Data cleaning, feature engineering, model training, evaluation, and visualization.
 - **Time-aware validation**: Ensures predictions use only stats prior to the game date.
 - **Model explainability**: Feature importance analysis to show which stats matter most for predicting wins.
-- **Interactive demo (optional)**: Predict outcomes between two teams and visualize key indicators.
+- **Interactive demo**: Streamlit web app to predict outcomes between two teams and visualize key indicators.
 
 ---
 
 ## 📊 Dataset
 
-- Source: `NBA_GAMES.csv`  
+- Source: `Data/NBA_GAMES.csv`  
 - Stats per game include:
   - `FG_PCT`, `FG3_PCT`, `FT_PCT` (shooting efficiency)
   - `AST`, `REB`, `MIN` (team activity)
@@ -36,29 +36,65 @@ The goal is **not** to predict future seasons (since rosters change), but to mod
 - **Python 3.11**
 - **Pandas**, **NumPy** for data manipulation
 - **Scikit-learn**, **XGBoost** for modeling
-- **Matplotlib**, **Seaborn**, **Plotly** for visualization
-- **Jupyter Notebook** / **Streamlit** (for exploration or UI)
-- *(Optional)* Flask API or Docker for deployment
+- **Matplotlib**, **Plotly** for visualization
+- **Streamlit** for interactive web interface
 
 ---
 
 ## 📁 Project Structure
-nba-outcome-predictor/
+```
+NBA Predict/
 │
-├── data/
-│ └── NBA_GAMES.csv
-│
-├── notebooks/
-│ └── EDA_and_Modeling.ipynb
+├── Data/
+│ ├── NBA_GAMES.csv
+│ └── NBA_TEAMS.csv
 │
 ├── src/
 │ ├── preprocessing.py
 │ ├── feature_engineering.py
 │ ├── train_model.py
-│ └── predict.py
+│ ├── predict.py
+│ └── main.py
 │
 ├── app/
 │ └── streamlit_app.py
 │
-├── README.md
-└── requirements.txt
+├── README
+├── requirements.txt
+└── .gitignore
+```
+
+---
+
+## 🚀 Quick Start
+
+1. **Install dependencies:**
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+2. **Run the model training:**
+   ```bash
+   python src/main.py
+   ```
+
+3. **Launch the interactive app:**
+   ```bash
+   python -m streamlit run app/streamlit_app.py
+   ```
+
+---
+
+## 📈 Model Performance
+
+The project includes multiple model types:
+- **Random Forest**: Good for feature importance analysis
+- **XGBoost**: High performance gradient boosting
+- **Logistic Regression**: Interpretable baseline model
+
+Feature engineering includes:
+- Rolling averages (5 and 10 game windows)
+- Home/away indicators
+- Rest days between games
+- Win streaks and momentum
+- Opponent performance metrics

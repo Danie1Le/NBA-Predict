@@ -3,7 +3,5 @@ numpy
 scikit-learn
 xgboost
 matplotlib
-seaborn
 plotly
-jupyter
 streamlit 

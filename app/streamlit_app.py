@@ -147,6 +147,7 @@ def get_team_season_stats(games_df, team_id):
         'season': {
             'wins': season_total['WL'].apply(lambda x: 1 if x == 'W' else 0).sum(),
             'games': len(season_total),
+            'win_pct': season_total['WL'].apply(lambda x: 1 if x == 'W' else 0).mean() if len(season_total) > 0 else 0.5,
             'PTS': season_total['PTS'].mean(),
             'FG_PCT': season_total['FG_PCT'].mean(),
             'FG3_PCT': season_total['FG3_PCT'].mean(),
@@ -348,12 +349,26 @@ def create_prediction_input_real_data(teams_df, games_df, team_map):
             st.error("No data available for this team")
             return None, None, None
     
-    # Create feature vector - SIMPLIFIED (10 features only for improved accuracy)
+    # Create feature vector with all features
     input_data = {
         'HOME': 1,  # Home team advantage
-        'PTS_rolling5': home_pts_5, 'FG_PCT_rolling5': home_fg_pct_5, 'TOV_rolling5': home_tov_5,
+        # Team rolling stats (5-game)
+        'PTS_rolling5': home_pts_5, 'FG_PCT_rolling5': home_fg_pct_5, 'FG3_PCT_rolling5': home_fg3_pct_5,
+        'FT_PCT_rolling5': home_ft_pct_5, 'REB_rolling5': home_reb_5, 'AST_rolling5': home_ast_5, 'TOV_rolling5': home_tov_5,
+        # Team rolling stats (10-game)
+        'PTS_rolling10': home_pts_10, 'FG_PCT_rolling10': home_fg_pct_10, 'FG3_PCT_rolling10': home_fg3_pct_10,
+        'FT_PCT_rolling10': home_ft_pct_10, 'REB_rolling10': home_reb_10, 'AST_rolling10': home_ast_10, 'TOV_rolling10': home_tov_10,
         'WIN_STREAK5': home_win_streak, 'REST_DAYS': home_rest_days,
-        'OPP_PTS_rolling5': away_pts_5, 'OPP_FG_PCT_rolling5': away_fg_pct_5, 'OPP_TOV_rolling5': away_tov_5,
+        # Team season strength
+        'SEASON_WIN_PCT': home_stats['season']['win_pct'] if home_stats else 0.5,
+        # Opponent rolling stats (5-game)
+        'OPP_PTS_rolling5': away_pts_5, 'OPP_FG_PCT_rolling5': away_fg_pct_5, 'OPP_FG3_PCT_rolling5': away_fg3_pct_5,
+        'OPP_FT_PCT_rolling5': away_ft_pct_5, 'OPP_REB_rolling5': away_reb_5, 'OPP_AST_rolling5': away_ast_5, 'OPP_TOV_rolling5': away_tov_5,
+        # Opponent rolling stats (10-game)
+        'OPP_PTS_rolling10': away_pts_10, 'OPP_FG_PCT_rolling10': away_fg_pct_10, 'OPP_FG3_PCT_rolling10': away_fg3_pct_10,
+        'OPP_FT_PCT_rolling10': away_ft_pct_10, 'OPP_REB_rolling10': away_reb_10, 'OPP_AST_rolling10': away_ast_10, 'OPP_TOV_rolling10': away_tov_10,
+        # Opponent season strength
+        'OPP_SEASON_WIN_PCT': away_stats['season']['win_pct'] if away_stats else 0.5,
         'OPP_REST_DAYS': away_rest_days
     }
     
@@ -361,48 +376,73 @@ def create_prediction_input_real_data(teams_df, games_df, team_map):
 
 @st.cache_data
 def load_model_and_data():
-    """Load data and train improved model - 75% validated accuracy"""
-    from sklearn.linear_model import LogisticRegression
+    """Load data and train proper model with all features"""
+    import sys
+    import os
+    
+    # Add src directory to path
+    sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'src'))
+    
+    from preprocessing import load_and_clean_data
+    from feature_engineering import create_features
+    from train_model import train_model
     
     # Load and process data
     df = load_and_clean_data('Data/NBA_GAMES.csv')
     df = create_features(df)
     
-    # Use REGULAR SEASON games only for training (more predictable than playoffs)
-    regular_season = df[df['Game_ID'].astype(str).str.startswith('2240')]
-    regular_season = regular_season.drop_duplicates(subset=['Game_ID', 'GAME_DATE'])
-    
-    # IMPROVED FEATURES - reduced from 32 to 10 to prevent overfitting
+    # Select features and target (same as main.py)
     features = [
-        'HOME',  # Home court advantage
-        'PTS_rolling5', 'FG_PCT_rolling5', 'TOV_rolling5',  # Team recent performance
-        'OPP_PTS_rolling5', 'OPP_FG_PCT_rolling5', 'OPP_TOV_rolling5',  # Opponent recent performance
-        'WIN_STREAK5',  # Recent momentum
-        'REST_DAYS', 'OPP_REST_DAYS'  # Fatigue factors
+        'HOME',
+        # Team rolling stats
+        'PTS_rolling5', 'FG_PCT_rolling5', 'FG3_PCT_rolling5', 'FT_PCT_rolling5',
+        'REB_rolling5', 'AST_rolling5', 'TOV_rolling5',
+        'PTS_rolling10', 'FG_PCT_rolling10', 'FG3_PCT_rolling10', 'FT_PCT_rolling10',
+        'REB_rolling10', 'AST_rolling10', 'TOV_rolling10',
+        'WIN_STREAK5',
+        # Team season strength
+        'SEASON_WIN_PCT',
+        # Opponent rolling stats
+        'OPP_PTS_rolling5', 'OPP_FG_PCT_rolling5', 'OPP_FG3_PCT_rolling5', 'OPP_FT_PCT_rolling5',
+        'OPP_REB_rolling5', 'OPP_AST_rolling5', 'OPP_TOV_rolling5',
+        'OPP_PTS_rolling10', 'OPP_FG_PCT_rolling10', 'OPP_FG3_PCT_rolling10', 'OPP_FT_PCT_rolling10',
+        'OPP_REB_rolling10', 'OPP_AST_rolling10', 'OPP_TOV_rolling10',
+        # Opponent season strength
+        'OPP_SEASON_WIN_PCT',
+        # Rest days
+        'REST_DAYS', 'OPP_REST_DAYS'
     ]
     
-    X = regular_season[features].fillna(0)
-    y = (regular_season['WL'] == 'W').astype(int)
+    X = df[features].fillna(0)
+    y = (df['WL'] == 'W').astype(int)
     
-    # IMPROVED MODEL - Logistic Regression with high regularization (75% validated accuracy)
-    model = LogisticRegression(
-        C=0.1,  # High regularization to prevent overfitting
-        max_iter=1000,
-        random_state=42
-    )
-    model.fit(X, y)
+    # Train model with improved parameters
+    model, X_test, y_test = train_model(X, y, model_type='xgb')
     
-    return model, features, df
+    return model, df, features
 
 def display_prediction(model, input_data, home_team, away_team):
     """Display prediction results with modern styling and confidence scores"""
-    # Make prediction using IMPROVED FEATURES (10 instead of 32)
+    # Make prediction using full feature set
     features = [
-        'HOME',  # Home court advantage
-        'PTS_rolling5', 'FG_PCT_rolling5', 'TOV_rolling5',  # Team recent performance
-        'OPP_PTS_rolling5', 'OPP_FG_PCT_rolling5', 'OPP_TOV_rolling5',  # Opponent recent performance
-        'WIN_STREAK5',  # Recent momentum
-        'REST_DAYS', 'OPP_REST_DAYS'  # Fatigue factors
+        'HOME',
+        # Team rolling stats
+        'PTS_rolling5', 'FG_PCT_rolling5', 'FG3_PCT_rolling5', 'FT_PCT_rolling5',
+        'REB_rolling5', 'AST_rolling5', 'TOV_rolling5',
+        'PTS_rolling10', 'FG_PCT_rolling10', 'FG3_PCT_rolling10', 'FT_PCT_rolling10',
+        'REB_rolling10', 'AST_rolling10', 'TOV_rolling10',
+        'WIN_STREAK5',
+        # Team season strength
+        'SEASON_WIN_PCT',
+        # Opponent rolling stats
+        'OPP_PTS_rolling5', 'OPP_FG_PCT_rolling5', 'OPP_FG3_PCT_rolling5', 'OPP_FT_PCT_rolling5',
+        'OPP_REB_rolling5', 'OPP_AST_rolling5', 'OPP_TOV_rolling5',
+        'OPP_PTS_rolling10', 'OPP_FG_PCT_rolling10', 'OPP_FG3_PCT_rolling10', 'OPP_FT_PCT_rolling10',
+        'OPP_REB_rolling10', 'OPP_AST_rolling10', 'OPP_TOV_rolling10',
+        # Opponent season strength
+        'OPP_SEASON_WIN_PCT',
+        # Rest days
+        'REST_DAYS', 'OPP_REST_DAYS'
     ]
     
     # Create DataFrame with exact column order
@@ -479,15 +519,17 @@ def main():
     # Load all data
     with st.spinner("Loading NBA data and training model..."):
         games_df, teams_df, team_map, team_names = load_all_data()
-        model, features, _ = load_model_and_data()
+        model, df, features = load_model_and_data()
     
     # Sidebar
-    st.sidebar.markdown("## 📈 Improved Model Performance")
-    st.sidebar.markdown("**Accuracy:** 75.1% ± 4.5%")
-    st.sidebar.markdown("**High Confidence:** 86.2%")
-    st.sidebar.markdown("**Model:** Logistic Regression")
-    st.sidebar.markdown("**Features:** 10 (simplified)")
-    st.sidebar.markdown("*✅ Validated on regular season games*")
+    st.sidebar.markdown("## 📈 Model Performance")
+    st.sidebar.markdown("**Model:** XGBoost with Season Strength")
+    st.sidebar.markdown("**Features:** 34 (comprehensive)")
+    st.sidebar.markdown("**Training Data:** All NBA Games")
+    st.sidebar.markdown("*✅ Season win percentage included*")
+    
+    st.sidebar.markdown("**Note:** This model may overestimate home court advantage. Elite teams often win on the road against weaker opponents.")
+    st.sidebar.markdown("**Use predictions as guidance, not guarantees.**")
     
     st.sidebar.markdown("## 🎯 How to Use")
     st.sidebar.markdown("1. Select home and away teams")
@@ -499,7 +541,8 @@ def main():
     st.sidebar.markdown("**Real NBA team data**")
     st.sidebar.markdown("- Recent game statistics")
     st.sidebar.markdown("- Rolling averages")
-    st.sidebar.markdown("- Team performance trends")
+    st.sidebar.markdown("- Season win percentages")
+    st.sidebar.markdown("- Rest days")
     
     # Main content
     input_data, home_team, away_team = create_prediction_input_real_data(teams_df, games_df, team_map)

@@ -25,11 +25,15 @@ def train_model(X, y, test_size=0.2, random_state=42, model_type='logreg'):
         print('Best params (RF):', grid.best_params_)
         model = grid.best_estimator_
     elif model_type == 'xgb' and XGBClassifier is not None:
+        # Modified parameters to reduce home court bias and improve opponent consideration
         param_grid = {
             'n_estimators': [100, 200],
-            'max_depth': [3, 5, 10],
-            'learning_rate': [0.05, 0.1],
-            'subsample': [0.8, 1.0]
+            'max_depth': [3, 5],  # Reduced max_depth to prevent overfitting
+            'learning_rate': [0.01, 0.05],  # Lower learning rate for more balanced predictions
+            'subsample': [0.8, 1.0],
+            'colsample_bytree': [0.8, 1.0],  # Added column sampling
+            'reg_alpha': [0, 0.1],  # L1 regularization
+            'reg_lambda': [0, 0.1]  # L2 regularization
         }
         grid = GridSearchCV(XGBClassifier(random_state=random_state, eval_metric='logloss'), param_grid, cv=3, n_jobs=1)
         grid.fit(X_train, y_train)

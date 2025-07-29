@@ -27,11 +27,15 @@ features = [
     'PTS_rolling10', 'FG_PCT_rolling10', 'FG3_PCT_rolling10', 'FT_PCT_rolling10',
     'REB_rolling10', 'AST_rolling10', 'TOV_rolling10',
     'WIN_STREAK5',
+    # Team season strength
+    'SEASON_WIN_PCT',
     # Opponent rolling stats
     'OPP_PTS_rolling5', 'OPP_FG_PCT_rolling5', 'OPP_FG3_PCT_rolling5', 'OPP_FT_PCT_rolling5',
     'OPP_REB_rolling5', 'OPP_AST_rolling5', 'OPP_TOV_rolling5',
     'OPP_PTS_rolling10', 'OPP_FG_PCT_rolling10', 'OPP_FG3_PCT_rolling10', 'OPP_FT_PCT_rolling10',
     'OPP_REB_rolling10', 'OPP_AST_rolling10', 'OPP_TOV_rolling10',
+    # Opponent season strength
+    'OPP_SEASON_WIN_PCT',
     # Rest days
     'REST_DAYS', 'OPP_REST_DAYS'
 ]
