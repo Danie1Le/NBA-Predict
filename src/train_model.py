@@ -14,40 +14,20 @@ def train_model(X, y, test_size=0.2, random_state=42, model_type='logreg'):
     """
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, random_state=random_state, stratify=y)
     if model_type == 'rf':
-        param_grid = {
-            'n_estimators': [100, 200],
-            'max_depth': [None, 5, 10],
-            'min_samples_split': [2, 5],
-            'min_samples_leaf': [1, 2]
-        }
-        grid = GridSearchCV(RandomForestClassifier(random_state=random_state), param_grid, cv=3, n_jobs=1)
-        grid.fit(X_train, y_train)
-        print('Best params (RF):', grid.best_params_)
-        model = grid.best_estimator_
+        # Fast Random Forest - no grid search
+        model = RandomForestClassifier(n_estimators=100, max_depth=10, random_state=random_state)
+        model.fit(X_train, y_train)
+        print('Trained Random Forest (fast mode)')
     elif model_type == 'xgb' and XGBClassifier is not None:
-        # Modified parameters to reduce home court bias and improve opponent consideration
-        param_grid = {
-            'n_estimators': [100, 200],
-            'max_depth': [3, 5],  # Reduced max_depth to prevent overfitting
-            'learning_rate': [0.01, 0.05],  # Lower learning rate for more balanced predictions
-            'subsample': [0.8, 1.0],
-            'colsample_bytree': [0.8, 1.0],  # Added column sampling
-            'reg_alpha': [0, 0.1],  # L1 regularization
-            'reg_lambda': [0, 0.1]  # L2 regularization
-        }
-        grid = GridSearchCV(XGBClassifier(random_state=random_state, eval_metric='logloss'), param_grid, cv=3, n_jobs=1)
-        grid.fit(X_train, y_train)
-        print('Best params (XGB):', grid.best_params_)
-        model = grid.best_estimator_
+        # Fast XGBoost - no grid search
+        model = XGBClassifier(n_estimators=100, max_depth=5, learning_rate=0.05, random_state=random_state, eval_metric='logloss')
+        model.fit(X_train, y_train)
+        print('Trained XGBoost (fast mode)')
     elif model_type == 'logreg':
-        param_grid = {
-            'C': [0.1, 1, 10],
-            'solver': ['lbfgs', 'liblinear']
-        }
-        grid = GridSearchCV(LogisticRegression(max_iter=1000, random_state=random_state), param_grid, cv=3, n_jobs=1)
-        grid.fit(X_train, y_train)
-        print('Best params (LogReg):', grid.best_params_)
-        model = grid.best_estimator_
+        # Fast Logistic Regression - no grid search
+        model = LogisticRegression(C=1, max_iter=1000, random_state=random_state)
+        model.fit(X_train, y_train)
+        print('Trained Logistic Regression (fast mode)')
     else:
         raise ValueError('Unknown or unavailable model_type: ' + str(model_type))
     return model, X_test, y_test 
