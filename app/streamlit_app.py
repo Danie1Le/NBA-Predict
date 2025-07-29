@@ -529,7 +529,6 @@ def main():
     st.sidebar.markdown("*✅ Season win percentage included*")
     
     st.sidebar.markdown("**Note:** This model may overestimate home court advantage. Elite teams often win on the road against weaker opponents.")
-    st.sidebar.markdown("**Use predictions as guidance, not guarantees.**")
     
     st.sidebar.markdown("## 🎯 How to Use")
     st.sidebar.markdown("1. Select home and away teams")
@@ -551,16 +550,10 @@ def main():
         display_prediction(model, input_data, home_team, away_team)
     
     # Model info
-    with st.expander("ℹ️ About the Improved Model"):
+    with st.expander("ℹ️ About Model"):
         st.markdown("""
         This NBA Game Predictor uses an **improved Logistic Regression model** with high regularization 
         to prevent overfitting and provide more realistic predictions.
-        
-        **✅ Model Improvements:**
-        - Reduced features from 32 to 10 (prevents overfitting)
-        - Regular season focus (avoids playoff complexity)
-        - High regularization (more stable predictions)
-        - Time-series validation (more realistic testing)
         
         **🎯 Key Features Used:**
         - Home court advantage
@@ -575,18 +568,15 @@ def main():
         - **Tested on 246 recent games: 78.0% accurate**
         
         **🔍 Confidence Levels:**
-        - 🔥 HIGH (>70%): 86% accurate - Trust these picks!
-        - ✅ MODERATE (60-70%): Good predictions
-        - ⚠️ LOW (<60%): Use with caution
+        - 🔥 HIGH (>70%)
+        - ✅ MODERATE (60-70%)
+        - ⚠️ LOW (<60%)
         
         **📈 Data Sources:**
         - NBA regular season games (2024-25 season)
         - Real team statistics and performance metrics
         - Cleaned and validated game data
         """)
-        
-        st.markdown("---")
-        st.markdown("**⚡ This model is validated and ready for real predictions!**")
 
 if __name__ == "__main__":
     main() 
