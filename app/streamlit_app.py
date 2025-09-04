@@ -16,6 +16,7 @@ from src.predict import predict_outcome
 from src.pytorch_model import train_pytorch_model, predict_pytorch
 from src.tensorflow_model import train_tensorflow_model
 from src.ensemble_model import train_ensemble_model
+from src.model_cache import create_model_cache
 import plotly.express as px
 import plotly.graph_objects as go
 
@@ -378,8 +379,8 @@ def create_prediction_input_real_data(teams_df, games_df, team_map):
     return input_data, home_team_abbr, away_team_abbr
 
 @st.cache_data
-def load_model_and_data(model_type='xgb'):
-    """Load data and train model with all features"""
+def load_data_and_models():
+    """Load data and create cached models for fast switching"""
     import sys
     import os
     
@@ -388,7 +389,6 @@ def load_model_and_data(model_type='xgb'):
     
     from preprocessing import load_and_clean_data
     from feature_engineering import create_features
-    from train_model import train_model
     
     # Load and process data
     df = load_and_clean_data('Data/NBA_GAMES.csv')
@@ -419,23 +419,12 @@ def load_model_and_data(model_type='xgb'):
     X = df[features].fillna(0)
     y = (df['WL'] == 'W').astype(int)
     
-    # Train model based on type
-    if model_type in ['xgb', 'rf', 'logreg']:
-        model, X_test, y_test = train_model(X, y, model_type=model_type)
-        return model, df, features, None, None
-    elif model_type == 'pytorch':
-        model, test_data, scaler, train_losses = train_pytorch_model(X, y, model_type='hybrid', epochs=30)
-        return model, df, features, scaler, train_losses
-    elif model_type == 'tensorflow':
-        model, test_data, history = train_tensorflow_model(X, y, model_type='hybrid', epochs=30)
-        return model, df, features, None, history
-    elif model_type == 'ensemble':
-        ensemble, results = train_ensemble_model(X, y, use_pytorch=True, use_tensorflow=True, use_traditional=True)
-        return ensemble, df, features, None, results
-    else:
-        raise ValueError(f"Unknown model type: {model_type}")
+    # Create model cache (this will load from cache if available, or train if not)
+    model_cache = create_model_cache(X, y, quick_mode=True, save_cache=True)
+    
+    return model_cache, df, features
 
-def display_prediction(model, input_data, home_team, away_team, model_type='xgb', scaler=None):
+def display_prediction(model_cache, input_data, home_team, away_team, model_type='xgb'):
     """Display prediction results with modern styling and confidence scores"""
     # Make prediction using full feature set
     features = [
@@ -462,22 +451,18 @@ def display_prediction(model, input_data, home_team, away_team, model_type='xgb'
     # Create DataFrame with exact column order
     X_input = pd.DataFrame([input_data])[features]
     
-    # Make prediction based on model type
-    if model_type == 'pytorch' and scaler is not None:
-        y_pred, y_proba = predict_pytorch(model, X_input, scaler)
-        prediction = y_pred[0]
-        prediction_proba = [1 - y_proba[0], y_proba[0]]  # Convert to [away_win, home_win] format
-    elif model_type == 'tensorflow':
-        y_pred, y_proba = model.predict(X_input)
-        prediction = y_pred[0]
-        prediction_proba = [1 - y_proba[0], y_proba[0]]  # Convert to [away_win, home_win] format
-    elif model_type == 'ensemble':
-        y_pred, y_proba = model.predict_ensemble(X_input)
-        prediction = y_pred[0]
-        prediction_proba = [1 - y_proba[0], y_proba[0]]  # Convert to [away_win, home_win] format
+    # Make prediction using cached model
+    y_pred, y_proba = model_cache.predict(model_type, X_input)
+    
+    # Handle different model output formats
+    if model_type in ['pytorch', 'tensorflow', 'ensemble']:
+        prediction = int(y_pred[0])
+        home_win_prob = float(y_proba[0])  # Probability that home team wins
+        away_win_prob = float(1 - y_proba[0])  # Probability that away team wins
     else:  # Traditional ML models
-        prediction_proba = model.predict_proba(X_input)[0]
-        prediction = model.predict(X_input)[0]
+        prediction = int(y_pred[0])
+        home_win_prob = float(y_proba[0][1])  # [away_win_prob, home_win_prob]
+        away_win_prob = float(y_proba[0][0])
     
     # Display results
     st.markdown("## 🎯 Prediction Results")
@@ -492,7 +477,7 @@ def display_prediction(model, input_data, home_team, away_team, model_type='xgb'
         st.markdown("### 🏆 Prediction")
         
         # Determine confidence level
-        max_confidence = max(prediction_proba[0], prediction_proba[1])
+        max_confidence = max(home_win_prob, away_win_prob)
         if max_confidence > 0.7:
             confidence_emoji = "🔥"
             confidence_text = "HIGH CONFIDENCE"
@@ -503,22 +488,22 @@ def display_prediction(model, input_data, home_team, away_team, model_type='xgb'
             confidence_emoji = "⚠️"
             confidence_text = "LOW CONFIDENCE"
         
-        if prediction == 1:
+        if prediction == 1:  # Home team wins
             st.markdown("""
             <div class="prediction-box">
                 <h2>🏠 {} WINS!</h2>
                 <p>Confidence: {:.1%}</p>
                 <p>{} {}</p>
             </div>
-            """.format(home_team, prediction_proba[1], confidence_emoji, confidence_text), unsafe_allow_html=True)
-        else:
+            """.format(home_team, home_win_prob, confidence_emoji, confidence_text), unsafe_allow_html=True)
+        else:  # Away team wins
             st.markdown("""
             <div class="prediction-box">
                 <h2>✈️ {} WINS!</h2>
                 <p>Confidence: {:.1%}</p>
                 <p>{} {}</p>
             </div>
-            """.format(away_team, prediction_proba[0], confidence_emoji, confidence_text), unsafe_allow_html=True)
+            """.format(away_team, away_win_prob, confidence_emoji, confidence_text), unsafe_allow_html=True)
     
     with col3:
         st.markdown("### ✈️ Away Team")
@@ -528,7 +513,7 @@ def display_prediction(model, input_data, home_team, away_team, model_type='xgb'
     st.markdown("### 📊 Confidence Breakdown")
     fig = go.Figure(data=[
         go.Bar(x=['Home Win', 'Away Win'], 
-               y=[prediction_proba[1], prediction_proba[0]],
+               y=[home_win_prob, away_win_prob],
                marker_color=['#1f77b4', '#ff7f0e'])
     ])
     fig.update_layout(
@@ -559,10 +544,10 @@ def main():
         }[x]
     )
     
-    # Load all data
-    with st.spinner(f"Loading NBA data and training {model_type.upper()} model..."):
+    # Load all data and models
+    with st.spinner("Loading NBA data and models..."):
         games_df, teams_df, team_map, team_names = load_all_data()
-        model, df, features, scaler, extra_data = load_model_and_data(model_type)
+        model_cache, df, features = load_data_and_models()
     
     # Sidebar
     st.sidebar.markdown("## 📈 Model Performance")
@@ -578,6 +563,15 @@ def main():
     st.sidebar.markdown("**Features:** 34 (comprehensive)")
     st.sidebar.markdown("**Training Data:** All NBA Games")
     st.sidebar.markdown("*✅ Season win percentage included*")
+    
+    # Show available models
+    available_models = model_cache.get_available_models()
+    st.sidebar.markdown("## 🚀 Available Models")
+    for model in available_models:
+        status = "✅" if model in available_models else "❌"
+        st.sidebar.markdown(f"{status} {model_descriptions.get(model, model)}")
+    
+    st.sidebar.markdown("*⚡ All models pre-trained for instant switching!*")
     
     if model_type in ['pytorch', 'tensorflow', 'ensemble']:
         st.sidebar.markdown("**🔥 Deep Learning Features:**")
@@ -607,7 +601,7 @@ def main():
     input_data, home_team, away_team = create_prediction_input_real_data(teams_df, games_df, team_map)
     
     if input_data and st.button("🎯 Predict Outcome", type="primary"):
-        display_prediction(model, input_data, home_team, away_team, model_type, scaler)
+        display_prediction(model_cache, input_data, home_team, away_team, model_type)
     
     # Model info
     with st.expander("ℹ️ About Models"):
