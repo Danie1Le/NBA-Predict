@@ -8,8 +8,8 @@ import sys
 import os
 from pathlib import Path
 
-# Add src directory to path
-sys.path.append(str(Path(__file__).parent.parent / "src"))
+# Import modules directly from current directory (backend/)
+# All required files are now copied to the backend directory
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -33,7 +33,7 @@ app = FastAPI(
 
 # Enable CORS for React frontend
 # Get CORS origins from environment variable or use defaults
-cors_origins = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000").split(",")
+cors_origins = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000,https://nba-predict.vercel.app").split(",")
 
 app.add_middleware(
     CORSMiddleware,
@@ -67,21 +67,36 @@ class TeamInfo(BaseModel):
     abbreviation: str
     full_name: str
 
-@app.on_event("startup")
-async def startup_event():
-    """Load models and data on startup"""
+# Remove startup event to prevent blocking
+# Models will be loaded on first request instead
+
+async def ensure_models_loaded():
+    """Ensure models are loaded, load them if not already loaded"""
     global model_cache, games_df, teams_df, team_map, features
     
-    print("🚀 Starting NBA Game Predictor API...")
-    print("📊 Loading data and models...")
+    if model_cache is None or teams_df is None:
+        print("📊 Loading models on first request...")
+        await load_models_async()
+    
+async def load_models_async():
+    """Load models asynchronously in background"""
+    global model_cache, games_df, teams_df, team_map, features
     
     try:
+        # Data and cache directories are now in the backend directory
+        data_dir = 'Data'
+        cache_dir = 'model_cache'
+        
+        print(f"📁 Using data directory: {data_dir}")
+        print(f"📁 Using cache directory: {cache_dir}")
+        
         # Load teams data
-        teams_df = pd.read_csv('../Data/NBA_TEAMS.csv')
+        
+        teams_df = pd.read_csv(f'{data_dir}/NBA_TEAMS.csv')
         team_map = dict(zip(teams_df['id'], teams_df['abbreviation']))
         
         # Load and process games data
-        games_df = load_and_clean_data('../Data/NBA_GAMES.csv')
+        games_df = load_and_clean_data(f'{data_dir}/NBA_GAMES.csv')
         games_df = create_features(games_df)
         
         # Define features
@@ -100,18 +115,75 @@ async def startup_event():
         X = games_df[features].fillna(0)
         y = (games_df['WL'] == 'W').astype(int)
         
-        model_cache = ModelCache(cache_dir="../model_cache")
-        if not model_cache.load_models():
-            print("❌ Failed to load cached models")
-            return
+        try:
+            model_cache = ModelCache(cache_dir=cache_dir)
+            if not model_cache.load_models():
+                print("❌ Failed to load cached models - API will start without models")
+                model_cache = None
+            else:
+                print("✅ All models loaded successfully!")
+                print(f"📈 Available models: {model_cache.get_available_models()}")
+        except ImportError as e:
+            print(f"⚠️ Some ML frameworks not available: {e}")
+            print("📊 Using traditional ML models only (XGBoost, Random Forest, Logistic Regression)")
+            # Create a minimal model cache with only traditional models
+            model_cache = None
         
-        print("✅ All models loaded successfully!")
-        print(f"📈 Available models: {model_cache.get_available_models()}")
         print("🎯 API ready for predictions!")
         
     except Exception as e:
         print(f"❌ Error during startup: {e}")
-        raise
+        import traceback
+        traceback.print_exc()
+        # Don't raise - let the API start anyway
+        print("⚠️ API starting without full functionality")
+
+async def train_deep_learning_models_async(model_cache, X, y):
+    """Train deep learning models in background"""
+    try:
+        print("🧠 Starting background training of deep learning models...")
+        
+        # Import availability flags
+        from model_cache import PYTORCH_AVAILABLE, TENSORFLOW_AVAILABLE, ENSEMBLE_AVAILABLE
+        
+        # Train PyTorch model
+        if PYTORCH_AVAILABLE:
+            try:
+                print("Training PyTorch model in background...")
+                from pytorch_model import train_pytorch_model
+                model, _, scaler, _ = train_pytorch_model(X, y, model_type='hybrid', epochs=20)
+                model_cache.models['pytorch'] = model
+                model_cache.models['pytorch_scaler'] = scaler
+                print("✅ PyTorch model trained in background!")
+            except Exception as e:
+                print(f"❌ PyTorch background training failed: {e}")
+        
+        # Train TensorFlow model
+        if TENSORFLOW_AVAILABLE:
+            try:
+                print("Training TensorFlow model in background...")
+                from tensorflow_model import train_tensorflow_model
+                model, _, _ = train_tensorflow_model(X, y, model_type='hybrid', epochs=20)
+                model_cache.models['tensorflow'] = model
+                print("✅ TensorFlow model trained in background!")
+            except Exception as e:
+                print(f"❌ TensorFlow background training failed: {e}")
+        
+        # Train Ensemble model
+        if ENSEMBLE_AVAILABLE:
+            try:
+                print("Training Ensemble model in background...")
+                from ensemble_model import train_ensemble_model
+                ensemble, _ = train_ensemble_model(X, y, use_pytorch=PYTORCH_AVAILABLE, use_tensorflow=TENSORFLOW_AVAILABLE, use_traditional=True)
+                model_cache.models['ensemble'] = ensemble
+                print("✅ Ensemble model trained in background!")
+            except Exception as e:
+                print(f"❌ Ensemble background training failed: {e}")
+        
+        print("🎉 All deep learning models trained in background!")
+        
+    except Exception as e:
+        print(f"❌ Background training error: {e}")
 
 @app.get("/")
 async def root():
@@ -119,12 +191,14 @@ async def root():
     return {
         "message": "NBA Game Predictor API",
         "status": "running",
-        "models_loaded": model_cache is not None and model_cache.is_trained
+        "models_loaded": model_cache is not None and hasattr(model_cache, 'is_trained') and model_cache.is_trained
     }
 
 @app.get("/teams", response_model=List[TeamInfo])
 async def get_teams():
     """Get list of all NBA teams"""
+    await ensure_models_loaded()
+    
     if teams_df is None:
         raise HTTPException(status_code=500, detail="Teams data not loaded")
     
@@ -220,13 +294,52 @@ async def get_team_stats(team_id: int):
 @app.post("/predict", response_model=PredictionResponse)
 async def predict_game(request: PredictionRequest):
     """Predict the outcome of a game"""
-    if model_cache is None or not model_cache.is_trained:
-        raise HTTPException(status_code=500, detail="Models not loaded")
+    global model_cache
+    await ensure_models_loaded()
+    
+    if model_cache is None:
+        # Try to train models on first prediction request
+        print("🚀 Training models on first prediction request...")
+        try:
+            X = games_df[features].fillna(0)
+            y = (games_df['WL'] == 'W').astype(int)
+            
+            model_cache = ModelCache(cache_dir='model_cache')
+            
+            # Train only traditional ML models for fast first response
+            print("⚡ Training traditional ML models first...")
+            traditional_models = ['xgb', 'rf', 'logreg']
+            for model_type in traditional_models:
+                try:
+                    print(f"Training {model_type.upper()}...")
+                    from train_model import train_model
+                    model, _, _ = train_model(X, y, model_type=model_type)
+                    model_cache.models[model_type] = model
+                    print(f"✓ {model_type.upper()} trained successfully")
+                except Exception as e:
+                    print(f"✗ {model_type.upper()} failed: {e}")
+            
+            model_cache.is_trained = True
+            print("✅ Traditional ML models trained successfully!")
+            
+            # Train deep learning models in background (async)
+            print("🧠 Training deep learning models in background...")
+            import asyncio
+            asyncio.create_task(train_deep_learning_models_async(model_cache, X, y))
+            
+        except Exception as e:
+            print(f"❌ Failed to train models: {e}")
+            raise HTTPException(status_code=500, detail="Failed to train models")
+    
+    if not hasattr(model_cache, 'is_trained') or not model_cache.is_trained:
+        raise HTTPException(status_code=500, detail="Models not trained")
     
     if games_df is None:
         raise HTTPException(status_code=500, detail="Games data not loaded")
     
     try:
+        print(f"🎯 Making prediction for {request.home_team_id} vs {request.away_team_id} using {request.model_type}")
+        
         # Create prediction input
         input_data = create_prediction_input(
             request.home_team_id, 
@@ -236,11 +349,17 @@ async def predict_game(request: PredictionRequest):
         )
         
         if input_data is None:
+            print("❌ Failed to create prediction input")
             raise HTTPException(status_code=400, detail="Could not create prediction input")
+        
+        print(f"✅ Prediction input created with {len(input_data)} features")
         
         # Make prediction
         X_input = pd.DataFrame([input_data])[features]
+        print(f"📊 Input shape: {X_input.shape}")
+        
         y_pred, y_proba = model_cache.predict(request.model_type, X_input)
+        print(f"🎯 Prediction result: {y_pred}, probabilities: {y_proba}")
         
         # Convert to proper formats
         if request.model_type in ['pytorch', 'tensorflow', 'ensemble']:
@@ -270,6 +389,9 @@ async def predict_game(request: PredictionRequest):
         )
         
     except Exception as e:
+        print(f"❌ Prediction error: {str(e)}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Prediction failed: {str(e)}")
 
 def create_prediction_input(home_team_id: int, away_team_id: int, games_df: pd.DataFrame, team_map: Dict) -> Optional[Dict]:
@@ -333,8 +455,18 @@ def create_prediction_input(home_team_id: int, away_team_id: int, games_df: pd.D
 @app.get("/models")
 async def get_available_models():
     """Get list of available models"""
+    await ensure_models_loaded()
+    
     if model_cache is None:
-        raise HTTPException(status_code=500, detail="Models not loaded")
+        return {
+            "available_models": ["xgb", "rf", "logreg"],  # Traditional ML only
+            "model_descriptions": {
+                'xgb': 'XGBoost (Gradient Boosting)',
+                'rf': 'Random Forest',
+                'logreg': 'Logistic Regression'
+            },
+            "status": "Traditional ML models only (PyTorch/TensorFlow not available)"
+        }
     
     return {
         "available_models": model_cache.get_available_models(),
@@ -349,11 +481,17 @@ async def get_available_models():
     }
 
 if __name__ == "__main__":
-    port = int(os.getenv("PORT", 8000))
+    port = int(os.getenv("PORT", 10000))  # Render default port is 10000
+    
+    print(f"🚀 Starting NBA Game Predictor API on port {port}")
+    print(f"📁 Current working directory: {os.getcwd()}")
+    print(f"📄 Script location: {__file__}")
+    
+    # Run the app - disable reload in production
     uvicorn.run(
-        "minimal_main:app",
+        "main:app",
         host="0.0.0.0",
         port=port,
-        reload=True,
+        reload=False,  # Disable reload in production
         log_level="info"
     )

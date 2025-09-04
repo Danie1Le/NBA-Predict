@@ -11,9 +11,29 @@ from pathlib import Path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from train_model import train_model
-from pytorch_model import train_pytorch_model, predict_pytorch
-from tensorflow_model import train_tensorflow_model
-from ensemble_model import train_ensemble_model
+
+# Conditional imports for optional ML frameworks
+try:
+    from pytorch_model import train_pytorch_model, predict_pytorch
+    PYTORCH_AVAILABLE = True
+except ImportError:
+    PYTORCH_AVAILABLE = False
+    train_pytorch_model = None
+    predict_pytorch = None
+
+try:
+    from tensorflow_model import train_tensorflow_model
+    TENSORFLOW_AVAILABLE = True
+except ImportError:
+    TENSORFLOW_AVAILABLE = False
+    train_tensorflow_model = None
+
+try:
+    from ensemble_model import train_ensemble_model
+    ENSEMBLE_AVAILABLE = True
+except ImportError:
+    ENSEMBLE_AVAILABLE = False
+    train_ensemble_model = None
 
 class ModelCache:
     """
@@ -65,45 +85,54 @@ class ModelCache:
         # 2. PyTorch Model
         print("\n2. Training PyTorch Model")
         print("-" * 40)
-        try:
-            print("Training PyTorch hybrid model...")
-            model, test_data, scaler, train_losses = train_pytorch_model(
-                X, y, model_type='hybrid', epochs=pytorch_epochs
-            )
-            self.models['pytorch'] = model
-            self.models['pytorch_scaler'] = scaler
-            print("✓ PyTorch model trained successfully")
-        except Exception as e:
-            print(f"✗ PyTorch model failed: {e}")
+        if PYTORCH_AVAILABLE:
+            try:
+                print("Training PyTorch hybrid model...")
+                model, test_data, scaler, train_losses = train_pytorch_model(
+                    X, y, model_type='hybrid', epochs=pytorch_epochs
+                )
+                self.models['pytorch'] = model
+                self.models['pytorch_scaler'] = scaler
+                print("✓ PyTorch model trained successfully")
+            except Exception as e:
+                print(f"✗ PyTorch model failed: {e}")
+        else:
+            print("⚠️ PyTorch not available - skipping PyTorch model")
         
         # 3. TensorFlow Model
         print("\n3. Training TensorFlow Model")
         print("-" * 40)
-        try:
-            print("Training TensorFlow hybrid model...")
-            model, test_data, history = train_tensorflow_model(
-                X, y, model_type='hybrid', epochs=tensorflow_epochs
-            )
-            self.models['tensorflow'] = model
-            print("✓ TensorFlow model trained successfully")
-        except Exception as e:
-            print(f"✗ TensorFlow model failed: {e}")
+        if TENSORFLOW_AVAILABLE:
+            try:
+                print("Training TensorFlow hybrid model...")
+                model, test_data, history = train_tensorflow_model(
+                    X, y, model_type='hybrid', epochs=tensorflow_epochs
+                )
+                self.models['tensorflow'] = model
+                print("✓ TensorFlow model trained successfully")
+            except Exception as e:
+                print(f"✗ TensorFlow model failed: {e}")
+        else:
+            print("⚠️ TensorFlow not available - skipping TensorFlow model")
         
         # 4. Ensemble Model
         print("\n4. Training Ensemble Model")
         print("-" * 40)
-        try:
-            print("Training ensemble model...")
-            ensemble, results = train_ensemble_model(
-                X, y, 
-                use_pytorch=True, 
-                use_tensorflow=True, 
-                use_traditional=True
-            )
-            self.models['ensemble'] = ensemble
-            print("✓ Ensemble model trained successfully")
-        except Exception as e:
-            print(f"✗ Ensemble model failed: {e}")
+        if ENSEMBLE_AVAILABLE:
+            try:
+                print("Training ensemble model...")
+                ensemble, results = train_ensemble_model(
+                    X, y, 
+                    use_pytorch=PYTORCH_AVAILABLE, 
+                    use_tensorflow=TENSORFLOW_AVAILABLE, 
+                    use_traditional=True
+                )
+                self.models['ensemble'] = ensemble
+                print("✓ Ensemble model trained successfully")
+            except Exception as e:
+                print(f"✗ Ensemble model failed: {e}")
+        else:
+            print("⚠️ Ensemble model not available - skipping ensemble model")
         
         self.is_trained = True
         print(f"\n🎉 All models trained! Ready for fast switching.")
@@ -211,12 +240,21 @@ class ModelCache:
         model, scaler = self.get_model(model_type)
         
         if model_type == 'pytorch':
-            return predict_pytorch(model, X, scaler)
+            if PYTORCH_AVAILABLE and predict_pytorch is not None:
+                return predict_pytorch(model, X, scaler)
+            else:
+                raise ValueError("PyTorch model not available")
         elif model_type == 'tensorflow':
-            y_pred, y_proba = model.predict(X)
-            return y_pred, y_proba
+            if TENSORFLOW_AVAILABLE:
+                y_pred, y_proba = model.predict(X)
+                return y_pred, y_proba
+            else:
+                raise ValueError("TensorFlow model not available")
         elif model_type == 'ensemble':
-            return model.predict_ensemble(X)
+            if ENSEMBLE_AVAILABLE:
+                return model.predict_ensemble(X)
+            else:
+                raise ValueError("Ensemble model not available")
         else:  # Traditional ML
             y_pred = model.predict(X)
             y_proba = model.predict_proba(X)

@@ -7,13 +7,13 @@ import PredictionResult from './components/PredictionResult';
 import TeamSelector from './components/TeamSelector';
 import TeamStats from './components/TeamStats';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://nba-predict-7hz6.onrender.com';
 
 function App() {
   const [teams, setTeams] = useState([]);
   const [selectedHomeTeam, setSelectedHomeTeam] = useState(null);
   const [selectedAwayTeam, setSelectedAwayTeam] = useState(null);
-  const [selectedModel, setSelectedModel] = useState('ensemble');
+  const [selectedModel, setSelectedModel] = useState('xgb');
   const [availableModels, setAvailableModels] = useState([]);
   const [prediction, setPrediction] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -46,7 +46,9 @@ function App() {
       ]);
       
       setTeams(teamsResponse.data);
-      setAvailableModels(modelsResponse.data.available_models);
+      // Show all models by default, even if backend doesn't have them yet
+      const allModels = ['xgb', 'rf', 'logreg', 'pytorch', 'tensorflow', 'ensemble'];
+      setAvailableModels(allModels);
     } catch (err) {
       setError('Failed to load initial data. Make sure the backend is running.');
       console.error('Error loading initial data:', err);
