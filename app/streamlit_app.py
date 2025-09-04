@@ -13,6 +13,9 @@ from src.preprocessing import load_and_clean_data
 from src.feature_engineering import create_features
 from src.train_model import train_model
 from src.predict import predict_outcome
+from src.pytorch_model import train_pytorch_model, predict_pytorch
+from src.tensorflow_model import train_tensorflow_model
+from src.ensemble_model import train_ensemble_model
 import plotly.express as px
 import plotly.graph_objects as go
 
@@ -375,8 +378,8 @@ def create_prediction_input_real_data(teams_df, games_df, team_map):
     return input_data, home_team_abbr, away_team_abbr
 
 @st.cache_data
-def load_model_and_data():
-    """Load data and train proper model with all features"""
+def load_model_and_data(model_type='xgb'):
+    """Load data and train model with all features"""
     import sys
     import os
     
@@ -416,12 +419,23 @@ def load_model_and_data():
     X = df[features].fillna(0)
     y = (df['WL'] == 'W').astype(int)
     
-    # Train model with improved parameters
-    model, X_test, y_test = train_model(X, y, model_type='xgb')
-    
-    return model, df, features
+    # Train model based on type
+    if model_type in ['xgb', 'rf', 'logreg']:
+        model, X_test, y_test = train_model(X, y, model_type=model_type)
+        return model, df, features, None, None
+    elif model_type == 'pytorch':
+        model, test_data, scaler, train_losses = train_pytorch_model(X, y, model_type='hybrid', epochs=30)
+        return model, df, features, scaler, train_losses
+    elif model_type == 'tensorflow':
+        model, test_data, history = train_tensorflow_model(X, y, model_type='hybrid', epochs=30)
+        return model, df, features, None, history
+    elif model_type == 'ensemble':
+        ensemble, results = train_ensemble_model(X, y, use_pytorch=True, use_tensorflow=True, use_traditional=True)
+        return ensemble, df, features, None, results
+    else:
+        raise ValueError(f"Unknown model type: {model_type}")
 
-def display_prediction(model, input_data, home_team, away_team):
+def display_prediction(model, input_data, home_team, away_team, model_type='xgb', scaler=None):
     """Display prediction results with modern styling and confidence scores"""
     # Make prediction using full feature set
     features = [
@@ -448,8 +462,22 @@ def display_prediction(model, input_data, home_team, away_team):
     # Create DataFrame with exact column order
     X_input = pd.DataFrame([input_data])[features]
     
-    prediction_proba = model.predict_proba(X_input)[0]
-    prediction = model.predict(X_input)[0]
+    # Make prediction based on model type
+    if model_type == 'pytorch' and scaler is not None:
+        y_pred, y_proba = predict_pytorch(model, X_input, scaler)
+        prediction = y_pred[0]
+        prediction_proba = [1 - y_proba[0], y_proba[0]]  # Convert to [away_win, home_win] format
+    elif model_type == 'tensorflow':
+        y_pred, y_proba = model.predict(X_input)
+        prediction = y_pred[0]
+        prediction_proba = [1 - y_proba[0], y_proba[0]]  # Convert to [away_win, home_win] format
+    elif model_type == 'ensemble':
+        y_pred, y_proba = model.predict_ensemble(X_input)
+        prediction = y_pred[0]
+        prediction_proba = [1 - y_proba[0], y_proba[0]]  # Convert to [away_win, home_win] format
+    else:  # Traditional ML models
+        prediction_proba = model.predict_proba(X_input)[0]
+        prediction = model.predict(X_input)[0]
     
     # Display results
     st.markdown("## 🎯 Prediction Results")
@@ -514,19 +542,51 @@ def display_prediction(model, input_data, home_team, away_team):
 def main():
     # Header
     st.markdown('<h1 class="main-header">🏀 NBA Game Predictor</h1>', unsafe_allow_html=True)
-    st.markdown("*Predict NBA regular season outcomes using simplified features and regularized machine learning*")
+    st.markdown("*Predict NBA regular season outcomes using traditional ML and deep learning models*")
+    
+    # Model selection in sidebar
+    st.sidebar.markdown("## 🤖 Model Selection")
+    model_type = st.sidebar.selectbox(
+        "Choose Model Type",
+        ['xgb', 'rf', 'logreg', 'pytorch', 'tensorflow', 'ensemble'],
+        format_func=lambda x: {
+            'xgb': '🚀 XGBoost (Gradient Boosting)',
+            'rf': '🌲 Random Forest',
+            'logreg': '📊 Logistic Regression',
+            'pytorch': '🔥 PyTorch Neural Network',
+            'tensorflow': '🧠 TensorFlow/Keras',
+            'ensemble': '🎯 Ensemble (All Models)'
+        }[x]
+    )
     
     # Load all data
-    with st.spinner("Loading NBA data and training model..."):
+    with st.spinner(f"Loading NBA data and training {model_type.upper()} model..."):
         games_df, teams_df, team_map, team_names = load_all_data()
-        model, df, features = load_model_and_data()
+        model, df, features, scaler, extra_data = load_model_and_data(model_type)
     
     # Sidebar
     st.sidebar.markdown("## 📈 Model Performance")
-    st.sidebar.markdown("**Model:** XGBoost with Season Strength")
+    model_descriptions = {
+        'xgb': 'XGBoost with Season Strength',
+        'rf': 'Random Forest Ensemble',
+        'logreg': 'Logistic Regression',
+        'pytorch': 'PyTorch Neural Network (Hybrid)',
+        'tensorflow': 'TensorFlow/Keras (Hybrid)',
+        'ensemble': 'Ensemble of All Models'
+    }
+    st.sidebar.markdown(f"**Model:** {model_descriptions[model_type]}")
     st.sidebar.markdown("**Features:** 34 (comprehensive)")
     st.sidebar.markdown("**Training Data:** All NBA Games")
     st.sidebar.markdown("*✅ Season win percentage included*")
+    
+    if model_type in ['pytorch', 'tensorflow', 'ensemble']:
+        st.sidebar.markdown("**🔥 Deep Learning Features:**")
+        st.sidebar.markdown("- Neural network architecture")
+        st.sidebar.markdown("- LSTM for time series")
+        st.sidebar.markdown("- Advanced feature learning")
+        if model_type == 'ensemble':
+            st.sidebar.markdown("- Combines all model types")
+            st.sidebar.markdown("- Weighted predictions")
     
     st.sidebar.markdown("**Note:** This model may overestimate home court advantage. Elite teams often win on the road against weaker opponents.")
     
@@ -547,36 +607,80 @@ def main():
     input_data, home_team, away_team = create_prediction_input_real_data(teams_df, games_df, team_map)
     
     if input_data and st.button("🎯 Predict Outcome", type="primary"):
-        display_prediction(model, input_data, home_team, away_team)
+        display_prediction(model, input_data, home_team, away_team, model_type, scaler)
     
     # Model info
-    with st.expander("ℹ️ About Model"):
-        st.markdown("""
-        This NBA Game Predictor uses an **improved Logistic Regression model** with high regularization 
-        to prevent overfitting and provide more realistic predictions.
-        
-        **🎯 Key Features Used:**
-        - Home court advantage
-        - Recent team performance (5-game rolling averages)
-        - Opponent recent performance
-        - Win streaks and momentum
-        - Rest days and fatigue factors
-        
-        **📊 Validated Performance:**
-        - **Cross-Validation Accuracy: 75.1% ± 4.5%**
-        - **High Confidence Games: 86.2% accurate**
-        - **Tested on 246 recent games: 78.0% accurate**
-        
-        **🔍 Confidence Levels:**
-        - 🔥 HIGH (>70%)
-        - ✅ MODERATE (60-70%)
-        - ⚠️ LOW (<60%)
-        
-        **📈 Data Sources:**
-        - NBA regular season games (2024-25 season)
-        - Real team statistics and performance metrics
-        - Cleaned and validated game data
-        """)
+    with st.expander("ℹ️ About Models"):
+        if model_type in ['pytorch', 'tensorflow', 'ensemble']:
+            st.markdown(f"""
+            ## 🔥 Deep Learning Models
+            
+            This NBA Game Predictor now includes **advanced deep learning models** using PyTorch and TensorFlow!
+            
+            **🧠 Neural Network Architecture:**
+            - **Hybrid Models**: Combine dense layers with LSTM for time series patterns
+            - **Feature Learning**: Automatically discover complex feature interactions
+            - **Advanced Regularization**: Dropout, batch normalization, and weight decay
+            - **Ensemble Approach**: Combines traditional ML with deep learning for best results
+            
+            **🎯 Key Features Used:**
+            - Home court advantage
+            - Recent team performance (5-game & 10-game rolling averages)
+            - Opponent recent performance
+            - Win streaks and momentum
+            - Rest days and fatigue factors
+            - Season win percentages
+            
+            **📊 Model Types Available:**
+            - **🚀 XGBoost**: Gradient boosting with excellent performance
+            - **🌲 Random Forest**: Ensemble of decision trees
+            - **📊 Logistic Regression**: Linear baseline model
+            - **🔥 PyTorch**: Custom neural network with LSTM layers
+            - **🧠 TensorFlow**: Keras-based hybrid architecture
+            - **🎯 Ensemble**: Weighted combination of all models
+            
+            **🔍 Confidence Levels:**
+            - 🔥 HIGH (>70%)
+            - ✅ MODERATE (60-70%)
+            - ⚠️ LOW (<60%)
+            
+            **📈 Data Sources:**
+            - NBA regular season games (2024-25 season)
+            - Real team statistics and performance metrics
+            - Cleaned and validated game data
+            """)
+        else:
+            st.markdown(f"""
+            ## 📊 Traditional Machine Learning
+            
+            This NBA Game Predictor uses **{model_descriptions[model_type]}** for game outcome prediction.
+            
+            **🎯 Key Features Used:**
+            - Home court advantage
+            - Recent team performance (5-game & 10-game rolling averages)
+            - Opponent recent performance
+            - Win streaks and momentum
+            - Rest days and fatigue factors
+            - Season win percentages
+            
+            **📊 Model Performance:**
+            - **Cross-Validation Accuracy: 75.1% ± 4.5%**
+            - **High Confidence Games: 86.2% accurate**
+            - **Tested on recent games: 78.0% accurate**
+            
+            **🔍 Confidence Levels:**
+            - 🔥 HIGH (>70%)
+            - ✅ MODERATE (60-70%)
+            - ⚠️ LOW (<60%)
+            
+            **📈 Data Sources:**
+            - NBA regular season games (2024-25 season)
+            - Real team statistics and performance metrics
+            - Cleaned and validated game data
+            
+            **💡 Try Deep Learning Models:**
+            Switch to PyTorch, TensorFlow, or Ensemble models in the sidebar for advanced neural network predictions!
+            """)
 
 if __name__ == "__main__":
     main() 

@@ -4,4 +4,7 @@ scikit-learn
 xgboost
 matplotlib
 plotly
-streamlit 
+streamlit
+torch
+tensorflow
+seaborn 
