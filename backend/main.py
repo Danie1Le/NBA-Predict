@@ -249,6 +249,11 @@ async def root():
         "port": os.getenv("PORT", 8000)
     }
 
+@app.get("/health")
+async def health_check():
+    """Lightweight health check for keeping service warm"""
+    return {"status": "healthy", "timestamp": pd.Timestamp.now().isoformat()}
+
 @app.get("/teams", response_model=List[TeamInfo])
 async def get_teams():
     """Get list of all NBA teams"""
@@ -392,9 +397,7 @@ async def predict_game(request: PredictionRequest):
         raise HTTPException(status_code=500, detail="Games data not loaded")
     
     try:
-        print(f"🎯 Making prediction for {request.home_team_id} vs {request.away_team_id} using {request.model_type}")
-        
-        # Create prediction input
+        # Create prediction input (optimized for speed)
         input_data = create_prediction_input(
             request.home_team_id, 
             request.away_team_id, 
@@ -403,10 +406,7 @@ async def predict_game(request: PredictionRequest):
         )
         
         if input_data is None:
-            print("❌ Failed to create prediction input")
             raise HTTPException(status_code=400, detail="Could not create prediction input")
-        
-        print(f"✅ Prediction input created with {len(input_data)} features")
         
         # Use the fastest available model if requested model not available
         available_models = model_cache.get_available_models()
@@ -426,12 +426,9 @@ async def predict_game(request: PredictionRequest):
                 raise HTTPException(status_code=500, detail="No models available")
             print(f"⚠️ Requested model '{request.model_type}' not available, using '{model_to_use}'")
         
-        # Make prediction
+        # Make prediction (optimized)
         X_input = pd.DataFrame([input_data])[features]
-        print(f"📊 Input shape: {X_input.shape}")
-        
         y_pred, y_proba = model_cache.predict(model_to_use, X_input)
-        print(f"🎯 Prediction result: {y_pred}, probabilities: {y_proba}")
         
         # Convert to proper formats
         if model_to_use in ['pytorch', 'tensorflow', 'ensemble']:

@@ -112,10 +112,13 @@ function App() {
       setLoading(true);
       setError(null);
       
+      // Add timeout for better UX
       const response = await axios.post(`${API_BASE_URL}/predict`, {
         home_team_id: selectedHomeTeam.id,
         away_team_id: selectedAwayTeam.id,
         model_type: selectedModel
+      }, {
+        timeout: 30000 // 30 second timeout
       });
       
       setPrediction({
@@ -124,7 +127,11 @@ function App() {
         awayTeamName: selectedAwayTeam.full_name
       });
     } catch (err) {
-      setError('Prediction failed. Please try again.');
+      if (err.code === 'ECONNABORTED') {
+        setError('Prediction is taking longer than expected. The AI is working hard! Please try again.');
+      } else {
+        setError('Prediction failed. Please try again.');
+      }
       console.error('Prediction error:', err);
     } finally {
       setLoading(false);
