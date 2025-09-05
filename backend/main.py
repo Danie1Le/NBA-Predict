@@ -39,8 +39,9 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 # Global variables for loaded data and models
@@ -111,22 +112,34 @@ async def load_models_async():
             'REST_DAYS', 'OPP_REST_DAYS'
         ]
         
-        # Load model cache
-        X = games_df[features].fillna(0)
-        y = (games_df['WL'] == 'W').astype(int)
-        
+        # Staged model loading: try full cache first, then traditional models
         try:
             model_cache = ModelCache(cache_dir=cache_dir)
-            if not model_cache.load_models():
-                print("❌ Failed to load cached models - API will start without models")
-                model_cache = None
-            else:
-                print("✅ All models loaded successfully!")
+            
+            # Try to load full model cache (includes deep learning models)
+            if model_cache.load_models(filename="cached_models.pkl"):
+                print("✅ All pre-trained models loaded successfully!")
                 print(f"📈 Available models: {model_cache.get_available_models()}")
-        except ImportError as e:
-            print(f"⚠️ Some ML frameworks not available: {e}")
-            print("📊 Using traditional ML models only (XGBoost, Random Forest, Logistic Regression)")
-            # Create a minimal model cache with only traditional models
+                print("🚀 API ready with instant predictions (including deep learning)!")
+            
+            # Fallback to traditional models only
+            elif model_cache.load_models(filename="traditional_models.pkl"):
+                print("✅ Traditional ML models loaded successfully!")
+                print(f"📈 Available models: {model_cache.get_available_models()}")
+                print("🚀 API ready with fast predictions (traditional ML)!")
+                print("💡 Deep learning models will be trained in background...")
+                
+                # Auto-upgrade to deep learning models in background
+                import asyncio
+                asyncio.create_task(upgrade_to_deep_learning_models())
+            
+            else:
+                print("❌ No cached models found - will train on first request")
+                model_cache = None
+                
+        except Exception as e:
+            print(f"⚠️ Error loading cached models: {e}")
+            print("📊 Will train models on first request")
             model_cache = None
         
         print("🎯 API ready for predictions!")
@@ -139,9 +152,10 @@ async def load_models_async():
         print("⚠️ API starting without full functionality")
 
 async def train_deep_learning_models_async(model_cache, X, y):
-    """Train deep learning models in background"""
+    """Train deep learning models in background to upgrade from traditional models"""
     try:
         print("🧠 Starting background training of deep learning models...")
+        print("⏳ This will upgrade your API to include PyTorch, TensorFlow, and Ensemble models")
         
         # Import availability flags
         from model_cache import PYTORCH_AVAILABLE, TENSORFLOW_AVAILABLE, ENSEMBLE_AVAILABLE
@@ -149,41 +163,80 @@ async def train_deep_learning_models_async(model_cache, X, y):
         # Train PyTorch model
         if PYTORCH_AVAILABLE:
             try:
-                print("Training PyTorch model in background...")
+                print("🔥 Training PyTorch model in background...")
                 from pytorch_model import train_pytorch_model
-                model, _, scaler, _ = train_pytorch_model(X, y, model_type='hybrid', epochs=20)
+                model, _, scaler, _ = train_pytorch_model(X, y, model_type='hybrid', epochs=30)
                 model_cache.models['pytorch'] = model
                 model_cache.models['pytorch_scaler'] = scaler
-                print("✅ PyTorch model trained in background!")
+                print("✅ PyTorch model trained and ready!")
             except Exception as e:
                 print(f"❌ PyTorch background training failed: {e}")
         
         # Train TensorFlow model
         if TENSORFLOW_AVAILABLE:
             try:
-                print("Training TensorFlow model in background...")
+                print("🤖 Training TensorFlow model in background...")
                 from tensorflow_model import train_tensorflow_model
-                model, _, _ = train_tensorflow_model(X, y, model_type='hybrid', epochs=20)
+                model, _, _ = train_tensorflow_model(X, y, model_type='hybrid', epochs=30)
                 model_cache.models['tensorflow'] = model
-                print("✅ TensorFlow model trained in background!")
+                print("✅ TensorFlow model trained and ready!")
             except Exception as e:
                 print(f"❌ TensorFlow background training failed: {e}")
         
         # Train Ensemble model
-        if ENSEMBLE_AVAILABLE:
+        if ENSEMBLE_AVAILABLE and (PYTORCH_AVAILABLE or TENSORFLOW_AVAILABLE):
             try:
-                print("Training Ensemble model in background...")
+                print("🎯 Training Ensemble model in background...")
                 from ensemble_model import train_ensemble_model
-                ensemble, _ = train_ensemble_model(X, y, use_pytorch=PYTORCH_AVAILABLE, use_tensorflow=TENSORFLOW_AVAILABLE, use_traditional=True)
+                ensemble, _ = train_ensemble_model(
+                    X, y, 
+                    use_pytorch=PYTORCH_AVAILABLE, 
+                    use_tensorflow=TENSORFLOW_AVAILABLE, 
+                    use_traditional=True
+                )
                 model_cache.models['ensemble'] = ensemble
-                print("✅ Ensemble model trained in background!")
+                print("✅ Ensemble model trained and ready!")
             except Exception as e:
                 print(f"❌ Ensemble background training failed: {e}")
         
-        print("🎉 All deep learning models trained in background!")
+        # Save the upgraded model cache
+        try:
+            model_cache.save_models(filename="cached_models.pkl")
+            print("💾 Deep learning models cached for future deployments!")
+        except Exception as e:
+            print(f"⚠️ Failed to save upgraded models: {e}")
+        
+        print("🎉 Background training complete! All models now available.")
+        print(f"📈 Available models: {model_cache.get_available_models()}")
         
     except Exception as e:
         print(f"❌ Background training error: {e}")
+
+async def upgrade_to_deep_learning_models():
+    """Upgrade from traditional models to include deep learning models"""
+    global model_cache, games_df, features
+    
+    if model_cache is None or games_df is None:
+        print("⚠️ Cannot upgrade models - base models or data not loaded")
+        return
+    
+    # Check if we already have deep learning models
+    available_models = model_cache.get_available_models()
+    has_deep_learning = any(model in available_models for model in ['pytorch', 'tensorflow', 'ensemble'])
+    
+    if has_deep_learning:
+        print("✅ Deep learning models already available!")
+        return
+    
+    print("🚀 Upgrading to deep learning models in background...")
+    
+    # Prepare training data
+    X = games_df[features].fillna(0)
+    y = (games_df['WL'] == 'W').astype(int)
+    
+    # Start background training
+    import asyncio
+    asyncio.create_task(train_deep_learning_models_async(model_cache, X, y))
 
 @app.get("/")
 async def root():
@@ -298,34 +351,33 @@ async def predict_game(request: PredictionRequest):
     await ensure_models_loaded()
     
     if model_cache is None:
-        # Try to train models on first prediction request
-        print("🚀 Training models on first prediction request...")
+        # Try to train models on first prediction request (fast fallback)
+        print("🚀 Training minimal model on first prediction request...")
         try:
             X = games_df[features].fillna(0)
             y = (games_df['WL'] == 'W').astype(int)
             
             model_cache = ModelCache(cache_dir='model_cache')
             
-            # Train only traditional ML models for fast first response
-            print("⚡ Training traditional ML models first...")
-            traditional_models = ['xgb', 'rf', 'logreg']
-            for model_type in traditional_models:
+            # Train only the fastest model (XGBoost) for immediate response
+            print("⚡ Training XGBoost for immediate predictions...")
+            try:
+                from train_model import train_model
+                model, _, _ = train_model(X, y, model_type='xgb')
+                model_cache.models['xgb'] = model
+                model_cache.is_trained = True
+                print("✓ XGBoost trained successfully - API ready!")
+                
+                # Save this model for future use
                 try:
-                    print(f"Training {model_type.upper()}...")
-                    from train_model import train_model
-                    model, _, _ = train_model(X, y, model_type=model_type)
-                    model_cache.models[model_type] = model
-                    print(f"✓ {model_type.upper()} trained successfully")
-                except Exception as e:
-                    print(f"✗ {model_type.upper()} failed: {e}")
-            
-            model_cache.is_trained = True
-            print("✅ Traditional ML models trained successfully!")
-            
-            # Train deep learning models in background (async)
-            print("🧠 Training deep learning models in background...")
-            import asyncio
-            asyncio.create_task(train_deep_learning_models_async(model_cache, X, y))
+                    model_cache.save_models()
+                    print("💾 Model cached for future deployments")
+                except:
+                    pass  # Don't fail if saving doesn't work
+                
+            except Exception as e:
+                print(f"❌ XGBoost training failed: {e}")
+                raise HTTPException(status_code=500, detail="Failed to train fallback model")
             
         except Exception as e:
             print(f"❌ Failed to train models: {e}")
@@ -354,15 +406,33 @@ async def predict_game(request: PredictionRequest):
         
         print(f"✅ Prediction input created with {len(input_data)} features")
         
+        # Use the fastest available model if requested model not available
+        available_models = model_cache.get_available_models()
+        model_to_use = request.model_type
+        
+        if model_to_use not in available_models:
+            # Fallback to fastest available model
+            if 'xgb' in available_models:
+                model_to_use = 'xgb'
+            elif 'rf' in available_models:
+                model_to_use = 'rf'
+            elif 'logreg' in available_models:
+                model_to_use = 'logreg'
+            elif available_models:
+                model_to_use = available_models[0]
+            else:
+                raise HTTPException(status_code=500, detail="No models available")
+            print(f"⚠️ Requested model '{request.model_type}' not available, using '{model_to_use}'")
+        
         # Make prediction
         X_input = pd.DataFrame([input_data])[features]
         print(f"📊 Input shape: {X_input.shape}")
         
-        y_pred, y_proba = model_cache.predict(request.model_type, X_input)
+        y_pred, y_proba = model_cache.predict(model_to_use, X_input)
         print(f"🎯 Prediction result: {y_pred}, probabilities: {y_proba}")
         
         # Convert to proper formats
-        if request.model_type in ['pytorch', 'tensorflow', 'ensemble']:
+        if model_to_use in ['pytorch', 'tensorflow', 'ensemble']:
             prediction = int(y_pred[0])
             home_win_prob = float(y_proba[0])
             away_win_prob = float(1 - y_proba[0])
@@ -385,7 +455,7 @@ async def predict_game(request: PredictionRequest):
             home_win_probability=home_win_prob,
             away_win_probability=away_win_prob,
             confidence=confidence,
-            model_used=request.model_type
+            model_used=model_to_use
         )
         
     except Exception as e:
@@ -454,30 +524,64 @@ def create_prediction_input(home_team_id: int, away_team_id: int, games_df: pd.D
 
 @app.get("/models")
 async def get_available_models():
-    """Get list of available models"""
+    """Get list of available models and their status"""
     await ensure_models_loaded()
     
     if model_cache is None:
         return {
-            "available_models": ["xgb", "rf", "logreg"],  # Traditional ML only
-            "model_descriptions": {
-                'xgb': 'XGBoost (Gradient Boosting)',
-                'rf': 'Random Forest',
-                'logreg': 'Logistic Regression'
-            },
-            "status": "Traditional ML models only (PyTorch/TensorFlow not available)"
+            "available_models": [],
+            "model_descriptions": {},
+            "status": "No models loaded - will train on first prediction request"
         }
     
+    available = model_cache.get_available_models()
+    has_deep_learning = any(model in available for model in ['pytorch', 'tensorflow', 'ensemble'])
+    
     return {
-        "available_models": model_cache.get_available_models(),
+        "available_models": available,
         "model_descriptions": {
-            'xgb': 'XGBoost (Gradient Boosting)',
-            'rf': 'Random Forest',
-            'logreg': 'Logistic Regression',
-            'pytorch': 'PyTorch Neural Network',
-            'tensorflow': 'TensorFlow/Keras',
-            'ensemble': 'Ensemble (All Models)'
+            'xgb': 'XGBoost (Gradient Boosting) - Fast & Accurate',
+            'rf': 'Random Forest - Robust & Interpretable',
+            'logreg': 'Logistic Regression - Simple & Fast',
+            'pytorch': 'PyTorch Neural Network - Advanced Deep Learning',
+            'tensorflow': 'TensorFlow/Keras - Production-Ready Deep Learning',
+            'ensemble': 'Ensemble (All Models) - Best Performance'
+        },
+        "status": "All models ready" if has_deep_learning else "Traditional ML ready, deep learning training in background",
+        "deep_learning_available": has_deep_learning,
+        "recommended_model": "ensemble" if "ensemble" in available else "xgb"
+    }
+
+@app.post("/models/upgrade")
+async def upgrade_models():
+    """Manually trigger upgrade to deep learning models"""
+    await ensure_models_loaded()
+    
+    if model_cache is None:
+        return {
+            "success": False,
+            "message": "No base models loaded - cannot upgrade"
         }
+    
+    available = model_cache.get_available_models()
+    has_deep_learning = any(model in available for model in ['pytorch', 'tensorflow', 'ensemble'])
+    
+    if has_deep_learning:
+        return {
+            "success": True,
+            "message": "Deep learning models already available",
+            "available_models": available
+        }
+    
+    # Trigger upgrade
+    import asyncio
+    asyncio.create_task(upgrade_to_deep_learning_models())
+    
+    return {
+        "success": True,
+        "message": "Deep learning model training started in background",
+        "estimated_time": "5-10 minutes",
+        "current_models": available
     }
 
 if __name__ == "__main__":

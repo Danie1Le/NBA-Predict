@@ -24,8 +24,8 @@ def train_model(X, y, test_size=0.2, random_state=42, model_type='logreg'):
         model.fit(X_train, y_train)
         print('Trained XGBoost (fast mode)')
     elif model_type == 'logreg':
-        # Fast Logistic Regression - no grid search
-        model = LogisticRegression(C=1, max_iter=1000, random_state=random_state)
+        # Fast Logistic Regression - no grid search, increased max_iter to prevent convergence warnings
+        model = LogisticRegression(C=1, max_iter=2000, random_state=random_state, solver='liblinear')
         model.fit(X_train, y_train)
         print('Trained Logistic Regression (fast mode)')
     else:
