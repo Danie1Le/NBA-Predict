@@ -33,12 +33,12 @@ app = FastAPI(
 
 # Enable CORS for React frontend
 # Get CORS origins from environment variable or use defaults
-cors_origins = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000,https://nba-predict.vercel.app").split(",")
+cors_origins = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000,https://nba-predict.vercel.app,https://*.vercel.app").split(",")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=cors_origins,
-    allow_credentials=True,
+    allow_origins=["*"],  # Allow all origins for now to fix the 404 issue
+    allow_credentials=False,  # Must be False when allow_origins is ["*"]
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
     expose_headers=["*"],
@@ -244,7 +244,9 @@ async def root():
     return {
         "message": "NBA Game Predictor API",
         "status": "running",
-        "models_loaded": model_cache is not None and hasattr(model_cache, 'is_trained') and model_cache.is_trained
+        "models_loaded": model_cache is not None and hasattr(model_cache, 'is_trained') and model_cache.is_trained,
+        "available_models": model_cache.get_available_models() if model_cache else [],
+        "port": os.getenv("PORT", 8000)
     }
 
 @app.get("/teams", response_model=List[TeamInfo])
@@ -585,7 +587,7 @@ async def upgrade_models():
     }
 
 if __name__ == "__main__":
-    port = int(os.getenv("PORT", 10000))  # Render default port is 10000
+    port = int(os.getenv("PORT", 8000))  # Render default port is 8000
     
     print(f"🚀 Starting NBA Game Predictor API on port {port}")
     print(f"📁 Current working directory: {os.getcwd()}")

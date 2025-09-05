@@ -17,7 +17,7 @@ def start_api():
         "http://localhost:3000,http://127.0.0.1:3000,https://nba-predict.vercel.app,https://nba-predict-7hz6.onrender.com")
     
     # Get port from environment
-    port = int(os.getenv("PORT", 10000))
+    port = int(os.getenv("PORT", 8000))
     
     print("🚀 Starting NBA Game Predictor API (Optimized)")
     print("="*60)
