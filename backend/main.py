@@ -96,20 +96,29 @@ async def load_models_async():
         teams_df = pd.read_csv(f'{data_dir}/NBA_TEAMS.csv')
         team_map = dict(zip(teams_df['id'], teams_df['abbreviation']))
         
-        # Load and process games data
+        # Load and process games data (now game-level)
         games_df = load_and_clean_data(f'{data_dir}/NBA_GAMES.csv')
         games_df = create_features(games_df)
         
-        # Define features
+        # Define advanced features for improved predictions
         features = [
-            'HOME', 'PTS_rolling5', 'FG_PCT_rolling5', 'FG3_PCT_rolling5', 'FT_PCT_rolling5',
-            'REB_rolling5', 'AST_rolling5', 'TOV_rolling5', 'PTS_rolling10', 'FG_PCT_rolling10', 
-            'FG3_PCT_rolling10', 'FT_PCT_rolling10', 'REB_rolling10', 'AST_rolling10', 'TOV_rolling10',
-            'WIN_STREAK5', 'SEASON_WIN_PCT', 'OPP_PTS_rolling5', 'OPP_FG_PCT_rolling5', 'OPP_FG3_PCT_rolling5', 
-            'OPP_FT_PCT_rolling5', 'OPP_REB_rolling5', 'OPP_AST_rolling5', 'OPP_TOV_rolling5',
-            'OPP_PTS_rolling10', 'OPP_FG_PCT_rolling10', 'OPP_FG3_PCT_rolling10', 'OPP_FT_PCT_rolling10',
-            'OPP_REB_rolling10', 'OPP_AST_rolling10', 'OPP_TOV_rolling10', 'OPP_SEASON_WIN_PCT',
-            'REST_DAYS', 'OPP_REST_DAYS'
+            # Original features
+            'HOME_PTS_rolling5', 'HOME_FG_PCT_rolling5', 'HOME_FG3_PCT_rolling5', 'HOME_FT_PCT_rolling5',
+            'HOME_REB_rolling5', 'HOME_AST_rolling5', 'HOME_TOV_rolling5',
+            'AWAY_PTS_rolling5', 'AWAY_FG_PCT_rolling5', 'AWAY_FG3_PCT_rolling5', 'AWAY_FT_PCT_rolling5',
+            'AWAY_REB_rolling5', 'AWAY_AST_rolling5', 'AWAY_TOV_rolling5',
+            'HOME_SEASON_WIN_PCT', 'AWAY_SEASON_WIN_PCT',
+            
+            # Advanced difference features
+            'WIN_PCT_DIFF', 'WIN_PCT_RATIO', 'STRENGTH_ADVANTAGE',
+            'PTS_DIFF', 'FG_PCT_DIFF', 'FG3_PCT_DIFF', 'FT_PCT_DIFF',
+            'REB_DIFF', 'AST_DIFF', 'TOV_DIFF',
+            
+            # Efficiency and momentum features
+            'HOME_EFFICIENCY', 'AWAY_EFFICIENCY', 'EFFICIENCY_DIFF',
+            'HOME_MOMENTUM', 'AWAY_MOMENTUM', 'MOMENTUM_DIFF',
+            'HOME_COURT_ADVANTAGE', 'STATS_DOMINANCE', 'TIER_MATCHUP',
+            'HOME_RECENT_FORM', 'AWAY_RECENT_FORM', 'FORM_DIFF', 'CLUTCH_FACTOR'
         ]
         
         # Staged model loading: try full cache first, then traditional models
@@ -230,9 +239,9 @@ async def upgrade_to_deep_learning_models():
     
     print("🚀 Upgrading to deep learning models in background...")
     
-    # Prepare training data
+    # Prepare training data (game-level)
     X = games_df[features].fillna(0)
-    y = (games_df['WL'] == 'W').astype(int)
+    y = games_df['HOME_WON'].astype(int)
     
     # Start background training
     import asyncio
@@ -362,7 +371,7 @@ async def predict_game(request: PredictionRequest):
         print("🚀 Training minimal model on first prediction request...")
         try:
             X = games_df[features].fillna(0)
-            y = (games_df['WL'] == 'W').astype(int)
+            y = games_df['HOME_WON'].astype(int)
             
             model_cache = ModelCache(cache_dir='model_cache')
             
@@ -437,14 +446,16 @@ async def predict_game(request: PredictionRequest):
             away_win_prob = float(1 - y_proba[0])
         else:
             prediction = int(y_pred[0])
-            home_win_prob = float(y_proba[0][1])
-            away_win_prob = float(y_proba[0][0])
+            # For traditional models, y_proba[0] is [prob_class_0, prob_class_1]
+            # where class_0 = away team wins, class_1 = home team wins
+            away_win_prob = float(y_proba[0][0])  # Class 0: away team wins
+            home_win_prob = float(y_proba[0][1])  # Class 1: home team wins
         
-        # Determine confidence
+        # Determine confidence (adjusted for more realistic thresholds)
         max_confidence = max(home_win_prob, away_win_prob)
-        if max_confidence > 0.7:
+        if max_confidence > 0.75:
             confidence = "HIGH"
-        elif max_confidence > 0.6:
+        elif max_confidence > 0.65:
             confidence = "MODERATE"
         else:
             confidence = "LOW"
@@ -464,11 +475,15 @@ async def predict_game(request: PredictionRequest):
         raise HTTPException(status_code=500, detail=f"Prediction failed: {str(e)}")
 
 def create_prediction_input(home_team_id: int, away_team_id: int, games_df: pd.DataFrame, team_map: Dict) -> Optional[Dict]:
-    """Create prediction input from team IDs"""
+    """Create prediction input from team IDs using game-level data"""
     try:
-        # Get recent games for both teams
-        home_team_games = games_df[games_df['Team_ID'] == home_team_id].tail(10)
-        away_team_games = games_df[games_df['Team_ID'] == away_team_id].tail(10)
+        # Get recent games for both teams from the game-level dataset
+        home_team_games = games_df[
+            (games_df['HOME_TEAM_ID'] == home_team_id) | (games_df['AWAY_TEAM_ID'] == home_team_id)
+        ].tail(10)
+        away_team_games = games_df[
+            (games_df['HOME_TEAM_ID'] == away_team_id) | (games_df['AWAY_TEAM_ID'] == away_team_id)
+        ].tail(10)
         
         if home_team_games.empty or away_team_games.empty:
             return None
@@ -477,42 +492,58 @@ def create_prediction_input(home_team_id: int, away_team_id: int, games_df: pd.D
         home_latest = home_team_games.iloc[-1]
         away_latest = away_team_games.iloc[-1]
         
-        # Create input data
+        # Create input data for game-level prediction with advanced features
         input_data = {
-            'HOME': 1,  # Home team
-            'PTS_rolling5': home_latest['PTS_rolling5'],
-            'FG_PCT_rolling5': home_latest['FG_PCT_rolling5'],
-            'FG3_PCT_rolling5': home_latest['FG3_PCT_rolling5'],
-            'FT_PCT_rolling5': home_latest['FT_PCT_rolling5'],
-            'REB_rolling5': home_latest['REB_rolling5'],
-            'AST_rolling5': home_latest['AST_rolling5'],
-            'TOV_rolling5': home_latest['TOV_rolling5'],
-            'PTS_rolling10': home_latest['PTS_rolling10'],
-            'FG_PCT_rolling10': home_latest['FG_PCT_rolling10'],
-            'FG3_PCT_rolling10': home_latest['FG3_PCT_rolling10'],
-            'FT_PCT_rolling10': home_latest['FT_PCT_rolling10'],
-            'REB_rolling10': home_latest['REB_rolling10'],
-            'AST_rolling10': home_latest['AST_rolling10'],
-            'TOV_rolling10': home_latest['TOV_rolling10'],
-            'WIN_STREAK5': home_latest['WIN_STREAK5'],
-            'SEASON_WIN_PCT': home_latest['SEASON_WIN_PCT'],
-            'OPP_PTS_rolling5': away_latest['PTS_rolling5'],
-            'OPP_FG_PCT_rolling5': away_latest['FG_PCT_rolling5'],
-            'OPP_FG3_PCT_rolling5': away_latest['FG3_PCT_rolling5'],
-            'OPP_FT_PCT_rolling5': away_latest['FT_PCT_rolling5'],
-            'OPP_REB_rolling5': away_latest['REB_rolling5'],
-            'OPP_AST_rolling5': away_latest['AST_rolling5'],
-            'OPP_TOV_rolling5': away_latest['TOV_rolling5'],
-            'OPP_PTS_rolling10': away_latest['PTS_rolling10'],
-            'OPP_FG_PCT_rolling10': away_latest['FG_PCT_rolling10'],
-            'OPP_FG3_PCT_rolling10': away_latest['FG3_PCT_rolling10'],
-            'OPP_FT_PCT_rolling10': away_latest['FT_PCT_rolling10'],
-            'OPP_REB_rolling10': away_latest['REB_rolling10'],
-            'OPP_AST_rolling10': away_latest['AST_rolling10'],
-            'OPP_TOV_rolling10': away_latest['TOV_rolling10'],
-            'OPP_SEASON_WIN_PCT': away_latest['SEASON_WIN_PCT'],
-            'REST_DAYS': home_latest['REST_DAYS'],
-            'OPP_REST_DAYS': away_latest['REST_DAYS']
+            # Original features
+            'HOME_PTS_rolling5': home_latest['HOME_PTS_rolling5'],
+            'HOME_FG_PCT_rolling5': home_latest['HOME_FG_PCT_rolling5'],
+            'HOME_FG3_PCT_rolling5': home_latest['HOME_FG3_PCT_rolling5'],
+            'HOME_FT_PCT_rolling5': home_latest['HOME_FT_PCT_rolling5'],
+            'HOME_REB_rolling5': home_latest['HOME_REB_rolling5'],
+            'HOME_AST_rolling5': home_latest['HOME_AST_rolling5'],
+            'HOME_TOV_rolling5': home_latest['HOME_TOV_rolling5'],
+            'AWAY_PTS_rolling5': away_latest['AWAY_PTS_rolling5'],
+            'AWAY_FG_PCT_rolling5': away_latest['AWAY_FG_PCT_rolling5'],
+            'AWAY_FG3_PCT_rolling5': away_latest['AWAY_FG3_PCT_rolling5'],
+            'AWAY_FT_PCT_rolling5': away_latest['AWAY_FT_PCT_rolling5'],
+            'AWAY_REB_rolling5': away_latest['AWAY_REB_rolling5'],
+            'AWAY_AST_rolling5': away_latest['AWAY_AST_rolling5'],
+            'AWAY_TOV_rolling5': away_latest['AWAY_TOV_rolling5'],
+            'HOME_SEASON_WIN_PCT': home_latest['HOME_SEASON_WIN_PCT'],
+            'AWAY_SEASON_WIN_PCT': away_latest['AWAY_SEASON_WIN_PCT'],
+            
+            # Advanced difference features
+            'WIN_PCT_DIFF': home_latest['HOME_SEASON_WIN_PCT'] - away_latest['AWAY_SEASON_WIN_PCT'],
+            'WIN_PCT_RATIO': home_latest['HOME_SEASON_WIN_PCT'] / (away_latest['AWAY_SEASON_WIN_PCT'] + 0.01),
+            'STRENGTH_ADVANTAGE': 1 if (home_latest['HOME_SEASON_WIN_PCT'] - away_latest['AWAY_SEASON_WIN_PCT']) > 0.1 else (-1 if (home_latest['HOME_SEASON_WIN_PCT'] - away_latest['AWAY_SEASON_WIN_PCT']) < -0.1 else 0),
+            'PTS_DIFF': home_latest['HOME_PTS_rolling5'] - away_latest['AWAY_PTS_rolling5'],
+            'FG_PCT_DIFF': home_latest['HOME_FG_PCT_rolling5'] - away_latest['AWAY_FG_PCT_rolling5'],
+            'FG3_PCT_DIFF': home_latest['HOME_FG3_PCT_rolling5'] - away_latest['AWAY_FG3_PCT_rolling5'],
+            'FT_PCT_DIFF': home_latest['HOME_FT_PCT_rolling5'] - away_latest['AWAY_FT_PCT_rolling5'],
+            'REB_DIFF': home_latest['HOME_REB_rolling5'] - away_latest['AWAY_REB_rolling5'],
+            'AST_DIFF': home_latest['HOME_AST_rolling5'] - away_latest['AWAY_AST_rolling5'],
+            'TOV_DIFF': away_latest['AWAY_TOV_rolling5'] - home_latest['HOME_TOV_rolling5'],
+            
+            # Efficiency and momentum features
+            'HOME_EFFICIENCY': (home_latest['HOME_PTS_rolling5'] * home_latest['HOME_FG_PCT_rolling5'] * home_latest['HOME_AST_rolling5'] / (home_latest['HOME_TOV_rolling5'] + 1)),
+            'AWAY_EFFICIENCY': (away_latest['AWAY_PTS_rolling5'] * away_latest['AWAY_FG_PCT_rolling5'] * away_latest['AWAY_AST_rolling5'] / (away_latest['AWAY_TOV_rolling5'] + 1)),
+            'EFFICIENCY_DIFF': (home_latest['HOME_PTS_rolling5'] * home_latest['HOME_FG_PCT_rolling5'] * home_latest['HOME_AST_rolling5'] / (home_latest['HOME_TOV_rolling5'] + 1)) - (away_latest['AWAY_PTS_rolling5'] * away_latest['AWAY_FG_PCT_rolling5'] * away_latest['AWAY_AST_rolling5'] / (away_latest['AWAY_TOV_rolling5'] + 1)),
+            'HOME_MOMENTUM': home_latest['HOME_SEASON_WIN_PCT'] * home_latest['HOME_PTS_rolling5'] / 100,
+            'AWAY_MOMENTUM': away_latest['AWAY_SEASON_WIN_PCT'] * away_latest['AWAY_PTS_rolling5'] / 100,
+            'MOMENTUM_DIFF': (home_latest['HOME_SEASON_WIN_PCT'] * home_latest['HOME_PTS_rolling5'] / 100) - (away_latest['AWAY_SEASON_WIN_PCT'] * away_latest['AWAY_PTS_rolling5'] / 100),
+            'HOME_COURT_ADVANTAGE': (home_latest['HOME_SEASON_WIN_PCT'] - away_latest['AWAY_SEASON_WIN_PCT']) * 0.1,
+            'STATS_DOMINANCE': sum([
+                (home_latest['HOME_PTS_rolling5'] - away_latest['AWAY_PTS_rolling5']) > 5,
+                (home_latest['HOME_FG_PCT_rolling5'] - away_latest['AWAY_FG_PCT_rolling5']) > 0.05,
+                (home_latest['HOME_REB_rolling5'] - away_latest['AWAY_REB_rolling5']) > 2,
+                (home_latest['HOME_AST_rolling5'] - away_latest['AWAY_AST_rolling5']) > 2,
+                (away_latest['AWAY_TOV_rolling5'] - home_latest['HOME_TOV_rolling5']) > 1
+            ]),
+            'TIER_MATCHUP': int(pd.cut([home_latest['HOME_SEASON_WIN_PCT']], bins=3, labels=[1, 2, 3])[0]) - int(pd.cut([away_latest['AWAY_SEASON_WIN_PCT']], bins=3, labels=[1, 2, 3])[0]),
+            'HOME_RECENT_FORM': home_latest['HOME_PTS_rolling5'] / (home_latest['HOME_SEASON_WIN_PCT'] + 0.01),
+            'AWAY_RECENT_FORM': away_latest['AWAY_PTS_rolling5'] / (away_latest['AWAY_SEASON_WIN_PCT'] + 0.01),
+            'FORM_DIFF': (home_latest['HOME_PTS_rolling5'] / (home_latest['HOME_SEASON_WIN_PCT'] + 0.01)) - (away_latest['AWAY_PTS_rolling5'] / (away_latest['AWAY_SEASON_WIN_PCT'] + 0.01)),
+            'CLUTCH_FACTOR': home_latest['HOME_FT_PCT_rolling5'] - away_latest['AWAY_FT_PCT_rolling5']
         }
         
         return input_data

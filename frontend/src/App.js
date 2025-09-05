@@ -1,13 +1,27 @@
 import axios from 'axios';
 import { BarChart3, Circle, Target, TrendingUp, Users, Zap } from 'lucide-react';
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import LoadingSpinner from './components/LoadingSpinner';
 import ModelSelector from './components/ModelSelector';
 import PredictionResult from './components/PredictionResult';
 import TeamSelector from './components/TeamSelector';
 import TeamStats from './components/TeamStats';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://nba-predict-7hz6.onrender.com';
+// Auto-detect environment and set API URL
+const getApiUrl = () => {
+  // If running locally (development)
+  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    return 'http://localhost:8000';
+  }
+  // Production URL
+  return process.env.REACT_APP_API_URL || 'https://nba-predict-7hz6.onrender.com';
+};
+
+const API_BASE_URL = getApiUrl();
+
+// Debug logging
+console.log('🌐 API Base URL:', API_BASE_URL);
+console.log('🏠 Hostname:', window.location.hostname);
 
 function App() {
   const [teams, setTeams] = useState([]);
@@ -21,9 +35,6 @@ function App() {
   const [homeTeamStats, setHomeTeamStats] = useState(null);
   const [awayTeamStats, setAwayTeamStats] = useState(null);
 
-  useEffect(() => {
-    loadInitialData();
-  }, []);
 
   useEffect(() => {
     if (selectedHomeTeam) {
@@ -37,12 +48,39 @@ function App() {
     }
   }, [selectedAwayTeam]);
 
-  const loadInitialData = async () => {
+  const loadModels = useCallback(async () => {
+    try {
+      const modelsResponse = await axios.get(`${API_BASE_URL}/models`, {
+        timeout: 10000 // 10 second timeout
+      });
+      const backendModels = modelsResponse.data.available_models || [];
+      setAvailableModels(prevModels => {
+        // If we now have more models, show a notification
+        if (backendModels.length > prevModels.length) {
+          console.log('🎉 New models available:', backendModels);
+        }
+        return backendModels;
+      });
+    } catch (err) {
+      console.error('Error loading models:', err);
+    }
+  }, []);
+
+  const loadInitialData = useCallback(async () => {
     try {
       setLoading(true);
+      
+      // Add timeout and retry logic
+      const axiosConfig = {
+        timeout: 15000, // 15 second timeout
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      };
+      
       const [teamsResponse, modelsResponse] = await Promise.all([
-        axios.get(`${API_BASE_URL}/teams`),
-        axios.get(`${API_BASE_URL}/models`)
+        axios.get(`${API_BASE_URL}/teams`, axiosConfig),
+        axios.get(`${API_BASE_URL}/models`, axiosConfig)
       ]);
       
       setTeams(teamsResponse.data);
@@ -62,27 +100,20 @@ function App() {
         }, 30000);
       }
     } catch (err) {
-      setError('Failed to load initial data. Make sure the backend is running.');
       console.error('Error loading initial data:', err);
+      
+      // Show more specific error messages
+      if (err.code === 'ECONNABORTED') {
+        setError('Backend is taking longer than expected to respond. Please try refreshing the page.');
+      } else if (err.response?.status === 404) {
+        setError('Backend endpoint not found. Please check if the backend is deployed correctly.');
+      } else {
+        setError('Failed to load initial data. The backend might be starting up. Please wait a moment and refresh.');
+      }
     } finally {
       setLoading(false);
     }
-  };
-
-  const loadModels = async () => {
-    try {
-      const modelsResponse = await axios.get(`${API_BASE_URL}/models`);
-      const backendModels = modelsResponse.data.available_models || [];
-      setAvailableModels(backendModels);
-      
-      // If we now have more models, show a notification
-      if (backendModels.length > availableModels.length) {
-        console.log('🎉 New models available:', backendModels);
-      }
-    } catch (err) {
-      console.error('Error loading models:', err);
-    }
-  };
+  }, [loadModels]);
 
   const loadTeamStats = async (teamId, type) => {
     try {
@@ -143,6 +174,21 @@ function App() {
     setError(null);
   };
 
+  // Load initial data after functions are defined
+  useEffect(() => {
+    loadInitialData();
+    
+    // Retry loading data every 30 seconds if it failed
+    const retryInterval = setInterval(() => {
+      if (teams.length === 0 && availableModels.length === 0) {
+        console.log('Retrying to load data...');
+        loadInitialData();
+      }
+    }, 30000);
+    
+    return () => clearInterval(retryInterval);
+  }, [teams.length, availableModels.length, loadInitialData]);
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-900 via-purple-900 to-indigo-900">
       {/* Header */}
@@ -176,6 +222,15 @@ function App() {
         {error && (
           <div className="bg-red-500/20 border border-red-500/50 rounded-lg p-4 mb-6">
             <p className="text-red-200">{error}</p>
+            <button
+              onClick={() => {
+                setError(null);
+                loadInitialData();
+              }}
+              className="mt-2 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm transition-colors"
+            >
+              Retry Connection
+            </button>
           </div>
         )}
 

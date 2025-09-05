@@ -1,79 +1,89 @@
 import pandas as pd
+import numpy as np
 
 def create_features(df):
     """
-    Create features for modeling from the cleaned dataframe.
-    Adds a 'HOME' indicator, rolling averages for key stats, and recent win streak for each team.
+    Create advanced features for modeling from the game-level dataframe.
+    Focuses on team strength differences and advanced statistical features.
     """
-    # HOME: 1 if 'vs.' in MATCHUP, 0 if '@'
-    df['HOME'] = df['MATCHUP'].apply(lambda x: 1 if 'vs.' in x else 0)
-    # Sort for rolling features
-    df = df.sort_values(['Team_ID', 'GAME_DATE_REAL'])
-
-    # --- Rest days for each team ---
-    df['GAME_DATE_REAL'] = pd.to_datetime(df['GAME_DATE_REAL'])
-    df['REST_DAYS'] = df.groupby('Team_ID')['GAME_DATE_REAL'].diff().dt.days.fillna(0)
-
-    # --- Overall team strength (season win percentage) ---
-    # Calculate cumulative wins and losses for each team
-    df['WIN'] = (df['WL'] == 'W').astype(int)
-    df['LOSS'] = (df['WL'] == 'L').astype(int)
+    # Rename columns to match expected feature names
+    feature_mapping = {
+        'HOME_PTS_rolling5': 'HOME_PTS_rolling5',
+        'HOME_FG_PCT_rolling5': 'HOME_FG_PCT_rolling5', 
+        'HOME_FG3_PCT_rolling5': 'HOME_FG3_PCT_rolling5',
+        'HOME_FT_PCT_rolling5': 'HOME_FT_PCT_rolling5',
+        'HOME_REB_rolling5': 'HOME_REB_rolling5',
+        'HOME_AST_rolling5': 'HOME_AST_rolling5',
+        'HOME_TOV_rolling5': 'HOME_TOV_rolling5',
+        'AWAY_PTS_rolling5': 'AWAY_PTS_rolling5',
+        'AWAY_FG_PCT_rolling5': 'AWAY_FG_PCT_rolling5',
+        'AWAY_FG3_PCT_rolling5': 'AWAY_FG3_PCT_rolling5', 
+        'AWAY_FT_PCT_rolling5': 'AWAY_FT_PCT_rolling5',
+        'AWAY_REB_rolling5': 'AWAY_REB_rolling5',
+        'AWAY_AST_rolling5': 'AWAY_AST_rolling5',
+        'AWAY_TOV_rolling5': 'AWAY_TOV_rolling5',
+        'HOME_TEAM_ID_WIN_PCT': 'HOME_SEASON_WIN_PCT',
+        'AWAY_TEAM_ID_WIN_PCT': 'AWAY_SEASON_WIN_PCT'
+    }
     
-    # Calculate cumulative wins and losses
-    df['CUM_WINS'] = df.groupby('Team_ID')['WIN'].cumsum()
-    df['CUM_LOSSES'] = df.groupby('Team_ID')['LOSS'].cumsum()
+    # Rename columns
+    df = df.rename(columns=feature_mapping)
     
-    # Calculate season win percentage (excluding current game)
-    df['SEASON_WIN_PCT'] = df['CUM_WINS'] / (df['CUM_WINS'] + df['CUM_LOSSES']).fillna(0.5)
+    # === ADVANCED FEATURE ENGINEERING ===
     
-    # --- Opponent Team_ID ---
-    # Create a mapping of game IDs to team pairs
-    game_teams = df.groupby('Game_ID')['Team_ID'].apply(list).reset_index()
-    game_teams['OPP_TEAM_ID'] = game_teams['Team_ID'].apply(lambda x: x[1] if len(x) > 1 else None)
-    game_teams['TEAM_ID'] = game_teams['Team_ID'].apply(lambda x: x[0] if len(x) > 0 else None)
+    # 1. Team Strength Difference Features (most important)
+    df['WIN_PCT_DIFF'] = df['HOME_SEASON_WIN_PCT'] - df['AWAY_SEASON_WIN_PCT']
+    df['WIN_PCT_RATIO'] = df['HOME_SEASON_WIN_PCT'] / (df['AWAY_SEASON_WIN_PCT'] + 0.01)  # Avoid division by zero
+    df['STRENGTH_ADVANTAGE'] = np.where(df['WIN_PCT_DIFF'] > 0.1, 1, 
+                                       np.where(df['WIN_PCT_DIFF'] < -0.1, -1, 0))
     
-    # Create a lookup dictionary for opponent team IDs
-    opp_lookup = {}
-    for _, row in game_teams.iterrows():
-        if row['TEAM_ID'] is not None and row['OPP_TEAM_ID'] is not None:
-            opp_lookup[(row['Game_ID'], row['TEAM_ID'])] = row['OPP_TEAM_ID']
+    # 2. Offensive Efficiency Differences
+    df['PTS_DIFF'] = df['HOME_PTS_rolling5'] - df['AWAY_PTS_rolling5']
+    df['FG_PCT_DIFF'] = df['HOME_FG_PCT_rolling5'] - df['AWAY_FG_PCT_rolling5']
+    df['FG3_PCT_DIFF'] = df['HOME_FG3_PCT_rolling5'] - df['AWAY_FG3_PCT_rolling5']
+    df['FT_PCT_DIFF'] = df['HOME_FT_PCT_rolling5'] - df['AWAY_FT_PCT_rolling5']
     
-    # Apply opponent team ID mapping
-    df['OPP_TEAM_ID'] = df.apply(lambda row: opp_lookup.get((row['Game_ID'], row['Team_ID'])), axis=1)
-
-    # --- Rolling averages (last 5 and 10 games) ---
-    rolling_stats = ['PTS', 'FG_PCT', 'FG3_PCT', 'FT_PCT', 'REB', 'AST', 'TOV']
-    rolling_windows = [5, 10]
-    for window in rolling_windows:
-        for stat in rolling_stats:
-            df[f'{stat}_rolling{window}'] = df.groupby('Team_ID')[stat].transform(lambda x: x.rolling(window, 1).mean())
+    # 3. Defensive/Team Play Differences
+    df['REB_DIFF'] = df['HOME_REB_rolling5'] - df['AWAY_REB_rolling5']
+    df['AST_DIFF'] = df['HOME_AST_rolling5'] - df['AWAY_AST_rolling5']
+    df['TOV_DIFF'] = df['AWAY_TOV_rolling5'] - df['HOME_TOV_rolling5']  # More turnovers = worse
     
-    # Rolling win streak (last 5 games)
-    df['WIN_STREAK5'] = df.groupby('Team_ID')['WIN'].transform(lambda x: x.rolling(5, 1).sum())
-
-    # --- Opponent features via lookup (no merge, unique index) ---
-    for window in rolling_windows:
-        for stat in rolling_stats:
-            stat_col = f'{stat}_rolling{window}'
-            opp_col = f'OPP_{stat}_rolling{window}'
-            stat_lookup = (
-                df.groupby(['Team_ID', 'GAME_DATE_REAL'])[stat_col]
-                .mean()
-            )
-            df[opp_col] = df.set_index(['OPP_TEAM_ID', 'GAME_DATE_REAL']).index.map(stat_lookup)
+    # 4. Combined Efficiency Metrics
+    df['HOME_EFFICIENCY'] = (df['HOME_PTS_rolling5'] * df['HOME_FG_PCT_rolling5'] * 
+                            df['HOME_AST_rolling5'] / (df['HOME_TOV_rolling5'] + 1))
+    df['AWAY_EFFICIENCY'] = (df['AWAY_PTS_rolling5'] * df['AWAY_FG_PCT_rolling5'] * 
+                            df['AWAY_AST_rolling5'] / (df['AWAY_TOV_rolling5'] + 1))
+    df['EFFICIENCY_DIFF'] = df['HOME_EFFICIENCY'] - df['AWAY_EFFICIENCY']
     
-    # Opponent rest days
-    rest_lookup = (
-        df.groupby(['Team_ID', 'GAME_DATE_REAL'])['REST_DAYS']
-        .mean()
+    # 5. Momentum Features (recent form)
+    df['HOME_MOMENTUM'] = df['HOME_SEASON_WIN_PCT'] * df['HOME_PTS_rolling5'] / 100
+    df['AWAY_MOMENTUM'] = df['AWAY_SEASON_WIN_PCT'] * df['AWAY_PTS_rolling5'] / 100
+    df['MOMENTUM_DIFF'] = df['HOME_MOMENTUM'] - df['AWAY_MOMENTUM']
+    
+    # 6. Home Court Advantage Multiplier
+    df['HOME_COURT_ADVANTAGE'] = df['WIN_PCT_DIFF'] * 0.1  # Home teams get slight boost
+    
+    # 7. Statistical Dominance Features
+    df['STATS_DOMINANCE'] = (
+        (df['PTS_DIFF'] > 5).astype(int) +
+        (df['FG_PCT_DIFF'] > 0.05).astype(int) +
+        (df['REB_DIFF'] > 2).astype(int) +
+        (df['AST_DIFF'] > 2).astype(int) +
+        (df['TOV_DIFF'] > 1).astype(int)
     )
-    df['OPP_REST_DAYS'] = df.set_index(['OPP_TEAM_ID', 'GAME_DATE_REAL']).index.map(rest_lookup)
     
-    # Opponent season win percentage
-    season_win_lookup = (
-        df.groupby(['Team_ID', 'GAME_DATE_REAL'])['SEASON_WIN_PCT']
-        .mean()
-    )
-    df['OPP_SEASON_WIN_PCT'] = df.set_index(['OPP_TEAM_ID', 'GAME_DATE_REAL']).index.map(season_win_lookup)
-
-    return df 
+    # 8. Team Quality Tiers
+    df['HOME_TIER'] = pd.cut(df['HOME_SEASON_WIN_PCT'], bins=3, labels=[1, 2, 3])
+    df['AWAY_TIER'] = pd.cut(df['AWAY_SEASON_WIN_PCT'], bins=3, labels=[1, 2, 3])
+    df['TIER_MATCHUP'] = df['HOME_TIER'].astype(int) - df['AWAY_TIER'].astype(int)
+    
+    # 9. Recent Performance Trends (last 3 games vs season average)
+    # This would require more historical data, but we can simulate with current data
+    df['HOME_RECENT_FORM'] = df['HOME_PTS_rolling5'] / df['HOME_SEASON_WIN_PCT'].replace(0, 0.01)
+    df['AWAY_RECENT_FORM'] = df['AWAY_PTS_rolling5'] / df['AWAY_SEASON_WIN_PCT'].replace(0, 0.01)
+    df['FORM_DIFF'] = df['HOME_RECENT_FORM'] - df['AWAY_RECENT_FORM']
+    
+    # 10. Clutch Performance (close games)
+    df['CLUTCH_FACTOR'] = df['HOME_FT_PCT_rolling5'] - df['AWAY_FT_PCT_rolling5']
+    
+    return df

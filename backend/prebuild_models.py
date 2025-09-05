@@ -55,21 +55,30 @@ def prebuild_models():
         games_df = load_and_clean_data(f'{data_dir}/NBA_GAMES.csv')
         games_df = create_features(games_df)
         
-        # Define features (same as in main.py)
+        # Define advanced features for improved predictions (same as in main.py)
         features = [
-            'HOME', 'PTS_rolling5', 'FG_PCT_rolling5', 'FG3_PCT_rolling5', 'FT_PCT_rolling5',
-            'REB_rolling5', 'AST_rolling5', 'TOV_rolling5', 'PTS_rolling10', 'FG_PCT_rolling10', 
-            'FG3_PCT_rolling10', 'FT_PCT_rolling10', 'REB_rolling10', 'AST_rolling10', 'TOV_rolling10',
-            'WIN_STREAK5', 'SEASON_WIN_PCT', 'OPP_PTS_rolling5', 'OPP_FG_PCT_rolling5', 'OPP_FG3_PCT_rolling5', 
-            'OPP_FT_PCT_rolling5', 'OPP_REB_rolling5', 'OPP_AST_rolling5', 'OPP_TOV_rolling5',
-            'OPP_PTS_rolling10', 'OPP_FG_PCT_rolling10', 'OPP_FG3_PCT_rolling10', 'OPP_FT_PCT_rolling10',
-            'OPP_REB_rolling10', 'OPP_AST_rolling10', 'OPP_TOV_rolling10', 'OPP_SEASON_WIN_PCT',
-            'REST_DAYS', 'OPP_REST_DAYS'
+            # Original features
+            'HOME_PTS_rolling5', 'HOME_FG_PCT_rolling5', 'HOME_FG3_PCT_rolling5', 'HOME_FT_PCT_rolling5',
+            'HOME_REB_rolling5', 'HOME_AST_rolling5', 'HOME_TOV_rolling5',
+            'AWAY_PTS_rolling5', 'AWAY_FG_PCT_rolling5', 'AWAY_FG3_PCT_rolling5', 'AWAY_FT_PCT_rolling5',
+            'AWAY_REB_rolling5', 'AWAY_AST_rolling5', 'AWAY_TOV_rolling5',
+            'HOME_SEASON_WIN_PCT', 'AWAY_SEASON_WIN_PCT',
+            
+            # Advanced difference features
+            'WIN_PCT_DIFF', 'WIN_PCT_RATIO', 'STRENGTH_ADVANTAGE',
+            'PTS_DIFF', 'FG_PCT_DIFF', 'FG3_PCT_DIFF', 'FT_PCT_DIFF',
+            'REB_DIFF', 'AST_DIFF', 'TOV_DIFF',
+            
+            # Efficiency and momentum features
+            'HOME_EFFICIENCY', 'AWAY_EFFICIENCY', 'EFFICIENCY_DIFF',
+            'HOME_MOMENTUM', 'AWAY_MOMENTUM', 'MOMENTUM_DIFF',
+            'HOME_COURT_ADVANTAGE', 'STATS_DOMINANCE', 'TIER_MATCHUP',
+            'HOME_RECENT_FORM', 'AWAY_RECENT_FORM', 'FORM_DIFF', 'CLUTCH_FACTOR'
         ]
         
-        # Prepare training data
+        # Prepare training data (game-level)
         X = games_df[features].fillna(0)
-        y = (games_df['WL'] == 'W').astype(int)
+        y = games_df['HOME_WON'].astype(int)
         
         print(f"📊 Training data shape: X={X.shape}, y={y.shape}")
         
