@@ -23,13 +23,10 @@ COPY model_cache/ ./model_cache/
 ENV PYTHONUNBUFFERED=1
 ENV OMP_NUM_THREADS=1
 ENV MKL_NUM_THREADS=1
+ENV PREBUILD_TRADITIONAL_ONLY=1
 
 # Pre-build only traditional models during Docker build (memory efficient)
-RUN python -c "
-import os
-os.environ['PREBUILD_TRADITIONAL_ONLY'] = '1'
-exec(open('prebuild_models.py').read())
-"
+RUN python prebuild_models.py
 
 # Expose port
 EXPOSE 10000
