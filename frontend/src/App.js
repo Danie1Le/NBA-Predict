@@ -46,14 +46,41 @@ function App() {
       ]);
       
       setTeams(teamsResponse.data);
-      // Show all models by default, even if backend doesn't have them yet
-      const allModels = ['xgb', 'rf', 'logreg', 'pytorch', 'tensorflow', 'ensemble'];
-      setAvailableModels(allModels);
+      // Only show models that are actually available on the backend
+      const backendModels = modelsResponse.data.available_models || [];
+      setAvailableModels(backendModels);
+      
+      // If deep learning models are not available yet, check again in 30 seconds
+      const hasDeepLearning = backendModels.some(model => 
+        ['pytorch', 'tensorflow', 'ensemble'].includes(model)
+      );
+      
+      if (!hasDeepLearning && backendModels.length > 0) {
+        console.log('Deep learning models not ready yet, will check again in 30 seconds...');
+        setTimeout(() => {
+          loadModels(); // Check for updated models
+        }, 30000);
+      }
     } catch (err) {
       setError('Failed to load initial data. Make sure the backend is running.');
       console.error('Error loading initial data:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadModels = async () => {
+    try {
+      const modelsResponse = await axios.get(`${API_BASE_URL}/models`);
+      const backendModels = modelsResponse.data.available_models || [];
+      setAvailableModels(backendModels);
+      
+      // If we now have more models, show a notification
+      if (backendModels.length > availableModels.length) {
+        console.log('🎉 New models available:', backendModels);
+      }
+    } catch (err) {
+      console.error('Error loading models:', err);
     }
   };
 
@@ -132,7 +159,10 @@ function App() {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {loading && !prediction && (
           <div className="flex justify-center items-center py-12">
-            <LoadingSpinner />
+            <LoadingSpinner 
+              message="Loading NBA Predictor..." 
+              subMessage="Traditional models ready, deep learning models training in background"
+            />
           </div>
         )}
 
