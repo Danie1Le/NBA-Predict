@@ -17,7 +17,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy the backend files
 COPY *.py .
 COPY Data/ ./Data/
-COPY model_cache/ ./model_cache/
+
+# Create model_cache directory (will be populated during prebuild)
+RUN mkdir -p model_cache
 
 # Set memory limits for model training
 ENV PYTHONUNBUFFERED=1
