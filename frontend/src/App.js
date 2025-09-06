@@ -149,7 +149,9 @@ function App() {
 
   const loadTeamStats = async (teamId, type) => {
     try {
+      console.log(`Loading ${type} team stats for team ID: ${teamId}`);
       const response = await axios.get(`${API_BASE_URL}/team-stats/${teamId}`);
+      console.log(`${type} team stats response:`, response.data);
       if (type === 'home') {
         setHomeTeamStats(response.data);
       } else {
@@ -157,6 +159,12 @@ function App() {
       }
     } catch (err) {
       console.error(`Error loading ${type} team stats:`, err);
+      // Set empty stats to show error state
+      if (type === 'home') {
+        setHomeTeamStats(null);
+      } else {
+        setAwayTeamStats(null);
+      }
     }
   };
 
@@ -234,7 +242,7 @@ function App() {
   }, [teams.length, loadInitialData]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-900 via-purple-900 to-indigo-900">
+    <div className="min-h-screen bg-gradient-to-br from-blue-900 via-purple-900 to-indigo-900 flex flex-col">
       {/* Header */}
       <header className="glass-effect border-b border-white/20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
@@ -253,7 +261,7 @@ function App() {
       </header>
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-1">
         {loading && !prediction && (
           <div className="flex justify-center items-center py-12">
             <LoadingSpinner 
@@ -278,8 +286,25 @@ function App() {
           </div>
         )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Left Column - Team Selection */}
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+          {/* Left Column - Model Selection (Smaller) */}
+          <div className="lg:col-span-1">
+            <div className="glass-effect rounded-xl p-4">
+              <h2 className="text-lg font-semibold text-white mb-4 flex items-center">
+                <Target className="h-5 w-5 mr-2 text-nba-orange" />
+                Model
+              </h2>
+              
+              <ModelSelector
+                models={availableModels}
+                selectedModel={selectedModel}
+                onModelSelect={setSelectedModel}
+                disabled={loading}
+              />
+            </div>
+          </div>
+
+          {/* Middle Column - Team Selection */}
           <div className="lg:col-span-2 space-y-6">
             {/* Team Selection */}
             <div className="glass-effect rounded-xl p-6">
@@ -305,50 +330,61 @@ function App() {
                   disabled={loading}
                 />
               </div>
-            </div>
 
-            {/* Model Selection */}
-            <div className="glass-effect rounded-xl p-6">
-              <h2 className="text-2xl font-semibold text-white mb-6 flex items-center">
-                <Target className="h-6 w-6 mr-3 text-nba-orange" />
-                Model Selection
-              </h2>
-              
-              <ModelSelector
-                models={availableModels}
-                selectedModel={selectedModel}
-                onModelSelect={setSelectedModel}
-                disabled={loading}
-              />
-            </div>
-
-            {/* Team Statistics */}
-            {(homeTeamStats || awayTeamStats) && (
-              <div className="glass-effect rounded-xl p-6">
-                <h2 className="text-2xl font-semibold text-white mb-6 flex items-center">
-                  <BarChart3 className="h-6 w-6 mr-3 text-nba-orange" />
+              {/* Team Statistics - Right under team selection */}
+              <div className="mt-6">
+                <h3 className="text-lg font-semibold text-white mb-4 flex items-center">
+                  <BarChart3 className="h-5 w-5 mr-2 text-nba-orange" />
                   Team Statistics
-                </h2>
+                </h3>
                 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {homeTeamStats && selectedHomeTeam && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {homeTeamStats && selectedHomeTeam ? (
                     <TeamStats
                       teamStats={homeTeamStats}
                       teamName={selectedHomeTeam.full_name}
                       isHome={true}
                     />
+                  ) : selectedHomeTeam ? (
+                    <div className="p-4 rounded-lg border-2 border-blue-500/50 bg-blue-500/10">
+                      <div className="text-center text-gray-400">
+                        <BarChart3 className="h-8 w-8 mx-auto mb-2" />
+                        <p>Loading {selectedHomeTeam.full_name} stats...</p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="p-4 rounded-lg border-2 border-gray-500/50 bg-gray-500/10">
+                      <div className="text-center text-gray-400">
+                        <BarChart3 className="h-8 w-8 mx-auto mb-2" />
+                        <p>Select Home Team</p>
+                      </div>
+                    </div>
                   )}
                   
-                  {awayTeamStats && selectedAwayTeam && (
+                  {awayTeamStats && selectedAwayTeam ? (
                     <TeamStats
                       teamStats={awayTeamStats}
                       teamName={selectedAwayTeam.full_name}
                       isHome={false}
                     />
+                  ) : selectedAwayTeam ? (
+                    <div className="p-4 rounded-lg border-2 border-red-500/50 bg-red-500/10">
+                      <div className="text-center text-gray-400">
+                        <BarChart3 className="h-8 w-8 mx-auto mb-2" />
+                        <p>Loading {selectedAwayTeam.full_name} stats...</p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="p-4 rounded-lg border-2 border-gray-500/50 bg-gray-500/10">
+                      <div className="text-center text-gray-400">
+                        <BarChart3 className="h-8 w-8 mx-auto mb-2" />
+                        <p>Select Away Team</p>
+                      </div>
+                    </div>
                   )}
                 </div>
               </div>
-            )}
+            </div>
 
           </div>
 
@@ -393,7 +429,7 @@ function App() {
       </main>
 
       {/* Footer */}
-      <footer className="glass-effect border-t border-white/20 mt-12">
+      <footer className="glass-effect border-t border-white/20 mt-auto">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="text-center text-gray-300">
             <p>Powered by Machine Learning • XGBoost • PyTorch • TensorFlow</p>

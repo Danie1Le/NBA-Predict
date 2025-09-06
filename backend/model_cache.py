@@ -12,7 +12,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from train_model import train_model
 
-# Lazy imports for deep learning frameworks - KEPT FOR RESUME VALUE
+# Lazy imports for deep learning frameworks - COMMENTED OUT FOR DEPLOYMENT
 # These will be imported only when needed to prevent startup delays
 
 # Initialize as None - will be imported lazily when needed
@@ -22,51 +22,32 @@ train_tensorflow_model = None
 train_ensemble_model = None
 
 # Availability flags - will be set when modules are actually imported
-PYTORCH_AVAILABLE = None  # None means "not checked yet"
-TENSORFLOW_AVAILABLE = None
-ENSEMBLE_AVAILABLE = None
+PYTORCH_AVAILABLE = False  # Disabled for deployment
+TENSORFLOW_AVAILABLE = False  # Disabled for deployment
+ENSEMBLE_AVAILABLE = False  # Disabled for deployment
 
 def _lazy_import_pytorch():
     """Lazy import PyTorch modules - only when actually needed"""
     global PYTORCH_AVAILABLE, train_pytorch_model, predict_pytorch
-    if PYTORCH_AVAILABLE is None:  # Only check once
-        try:
-            from pytorch_model import train_pytorch_model, predict_pytorch
-            PYTORCH_AVAILABLE = True
-            print("✅ PyTorch modules loaded successfully")
-        except ImportError as e:
-            PYTORCH_AVAILABLE = False
-            train_pytorch_model = None
-            predict_pytorch = None
-            print(f"⚠️ PyTorch not available: {e}")
+    # PyTorch disabled for deployment
+    PYTORCH_AVAILABLE = False
+    print("⚠️ PyTorch disabled for deployment")
     return PYTORCH_AVAILABLE
 
 def _lazy_import_tensorflow():
     """Lazy import TensorFlow modules - only when actually needed"""
     global TENSORFLOW_AVAILABLE, train_tensorflow_model
-    if TENSORFLOW_AVAILABLE is None:  # Only check once
-        try:
-            from tensorflow_model import train_tensorflow_model
-            TENSORFLOW_AVAILABLE = True
-            print("✅ TensorFlow modules loaded successfully")
-        except ImportError as e:
-            TENSORFLOW_AVAILABLE = False
-            train_tensorflow_model = None
-            print(f"⚠️ TensorFlow not available: {e}")
+    # TensorFlow disabled for deployment
+    TENSORFLOW_AVAILABLE = False
+    print("⚠️ TensorFlow disabled for deployment")
     return TENSORFLOW_AVAILABLE
 
 def _lazy_import_ensemble():
     """Lazy import Ensemble modules - only when actually needed"""
     global ENSEMBLE_AVAILABLE, train_ensemble_model
-    if ENSEMBLE_AVAILABLE is None:  # Only check once
-        try:
-            from ensemble_model import train_ensemble_model
-            ENSEMBLE_AVAILABLE = True
-            print("✅ Ensemble modules loaded successfully")
-        except ImportError as e:
-            ENSEMBLE_AVAILABLE = False
-            train_ensemble_model = None
-            print(f"⚠️ Ensemble not available: {e}")
+    # Ensemble disabled for deployment
+    ENSEMBLE_AVAILABLE = False
+    print("⚠️ Ensemble disabled for deployment")
     return ENSEMBLE_AVAILABLE
 
 class ModelCache:

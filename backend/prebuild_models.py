@@ -121,58 +121,12 @@ def prebuild_models():
         print("\n🧠 STAGE 2: Training deep learning models (advanced features)...")
         print("-" * 50)
         
-        # Check if deep learning frameworks are available
-        try:
-            from model_cache import PYTORCH_AVAILABLE, TENSORFLOW_AVAILABLE, ENSEMBLE_AVAILABLE
-            
-            # Train PyTorch model with reduced epochs for build efficiency
-            if PYTORCH_AVAILABLE:
-                try:
-                    print("Training PyTorch model...")
-                    from pytorch_model import train_pytorch_model
-                    model, _, scaler, _ = train_pytorch_model(X, y, model_type='hybrid', epochs=25)
-                    model_cache.models['pytorch'] = model
-                    model_cache.models['pytorch_scaler'] = scaler
-                    print("✓ PyTorch model trained successfully")
-                except Exception as e:
-                    print(f"✗ PyTorch model failed: {e}")
-            else:
-                print("⚠️ PyTorch not available - skipping")
-            
-            # Train TensorFlow model with reduced epochs for build efficiency
-            if TENSORFLOW_AVAILABLE:
-                try:
-                    print("Training TensorFlow model...")
-                    from tensorflow_model import train_tensorflow_model
-                    model, _, _ = train_tensorflow_model(X, y, model_type='hybrid', epochs=25)
-                    model_cache.models['tensorflow'] = model
-                    print("✓ TensorFlow model trained successfully")
-                except Exception as e:
-                    print(f"✗ TensorFlow model failed: {e}")
-            else:
-                print("⚠️ TensorFlow not available - skipping")
-            
-            # Train Ensemble model
-            if ENSEMBLE_AVAILABLE and (PYTORCH_AVAILABLE or TENSORFLOW_AVAILABLE):
-                try:
-                    print("Training Ensemble model...")
-                    from ensemble_model import train_ensemble_model
-                    ensemble, _ = train_ensemble_model(
-                        X, y, 
-                        use_pytorch=PYTORCH_AVAILABLE, 
-                        use_tensorflow=TENSORFLOW_AVAILABLE, 
-                        use_traditional=True
-                    )
-                    model_cache.models['ensemble'] = ensemble
-                    print("✓ Ensemble model trained successfully")
-                except Exception as e:
-                    print(f"✗ Ensemble model failed: {e}")
-            else:
-                print("⚠️ Ensemble not available - skipping")
-        
-        except ImportError as e:
-            print(f"⚠️ Some deep learning frameworks not available: {e}")
-            print("📊 Only traditional ML models will be available")
+        # Deep learning models commented out for deployment
+        print("\n🧠 Deep learning models disabled for deployment")
+        print("-" * 50)
+        print("⚠️ PyTorch and TensorFlow models commented out")
+        print("⚠️ Only traditional ML models will be available")
+        print("📊 This ensures faster deployment and startup")
         
         # Save all models (including deep learning)
         model_cache.save_models(filename="cached_models.pkl")

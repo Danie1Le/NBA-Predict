@@ -46,15 +46,15 @@ const PredictionResult = ({ prediction, onReset }) => {
       <div className="text-center mb-6">
         <div className="bg-gradient-to-r from-nba-orange to-nba-red rounded-full p-1 mb-4">
           <div className="bg-gray-900 rounded-full p-4">
-            <div className="flex items-center justify-center space-x-3">
-              <div className="text-4xl">
+            <div className="flex flex-col items-center justify-center space-y-2">
+              <div className="text-3xl">
                 {prediction.prediction === 1 ? '🏠' : '✈️'}
               </div>
-              <div>
-                <h3 className="text-2xl font-bold text-white">
+              <div className="text-center">
+                <h3 className="text-lg font-bold text-white leading-tight">
                   {winner.abbreviation} WINS!
                 </h3>
-                <p className="text-gray-300">
+                <p className="text-sm text-gray-300 leading-tight">
                   {winner.full_name}
                 </p>
               </div>

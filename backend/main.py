@@ -31,6 +31,61 @@ app = FastAPI(
     version="1.0.0"
 )
 
+@app.on_event("startup")
+async def startup_event():
+    """Load data and models on startup"""
+    global games_df, teams_df, team_map, features, model_cache
+    
+    try:
+        print("🚀 Loading NBA data and models...")
+        
+        # Load teams data
+        data_dir = 'Data'
+        teams_df = pd.read_csv(f'{data_dir}/NBA_TEAMS.csv')
+        team_map = dict(zip(teams_df['id'], teams_df['abbreviation']))
+        
+        # Load and process games data (now game-level)
+        games_df = load_and_clean_data(f'{data_dir}/NBA_GAMES.csv')
+        games_df = create_features(games_df)
+        
+        # Define advanced features for improved predictions
+        features = [
+            # Original features
+            'HOME_PTS_rolling5', 'HOME_FG_PCT_rolling5', 'HOME_FG3_PCT_rolling5', 'HOME_FT_PCT_rolling5',
+            'HOME_REB_rolling5', 'HOME_AST_rolling5', 'HOME_TOV_rolling5',
+            'AWAY_PTS_rolling5', 'AWAY_FG_PCT_rolling5', 'AWAY_FG3_PCT_rolling5', 'AWAY_FT_PCT_rolling5',
+            'AWAY_REB_rolling5', 'AWAY_AST_rolling5', 'AWAY_TOV_rolling5',
+            'HOME_SEASON_WIN_PCT', 'AWAY_SEASON_WIN_PCT',
+            
+            # Advanced difference features
+            'WIN_PCT_DIFF', 'WIN_PCT_RATIO', 'STRENGTH_ADVANTAGE',
+            'PTS_DIFF', 'FG_PCT_DIFF', 'FG3_PCT_DIFF', 'FT_PCT_DIFF',
+            'REB_DIFF', 'AST_DIFF', 'TOV_DIFF',
+            
+            # Efficiency and momentum features
+            'HOME_EFFICIENCY', 'AWAY_EFFICIENCY', 'EFFICIENCY_DIFF',
+            'HOME_MOMENTUM', 'AWAY_MOMENTUM', 'MOMENTUM_DIFF',
+            'HOME_COURT_ADVANTAGE', 'STATS_DOMINANCE', 'TIER_MATCHUP',
+            'HOME_RECENT_FORM', 'AWAY_RECENT_FORM', 'FORM_DIFF', 'CLUTCH_FACTOR'
+        ]
+        
+        # Load model cache
+        model_cache = ModelCache(cache_dir="model_cache")
+        if not model_cache.load_models():
+            print("⚠️ No cached models found - models will be trained on first request")
+        else:
+            print("✅ Models loaded from cache")
+        
+        print(f"✅ Data loaded successfully!")
+        print(f"📊 Games: {len(games_df)}")
+        print(f"🏀 Teams: {len(teams_df)}")
+        print(f"🧠 Models: {len(model_cache.get_available_models())}")
+        
+    except Exception as e:
+        print(f"❌ Error loading data: {e}")
+        import traceback
+        traceback.print_exc()
+
 # Enable CORS for React frontend
 # Get CORS origins from environment variable or use defaults
 cors_origins = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000,https://nba-predict.vercel.app,https://*.vercel.app").split(",")
@@ -315,18 +370,53 @@ async def get_team_stats(team_id: int):
         raise HTTPException(status_code=500, detail="Games data not loaded")
     
     try:
-        # Get team games
-        team_games = games_df[games_df['Team_ID'] == team_id].sort_values('GAME_DATE_REAL', ascending=False)
-        team_games = team_games.drop_duplicates(subset=['Game_ID', 'GAME_DATE'])
+        # Get team games - team can be either home or away
+        home_games = games_df[games_df['HOME_TEAM_ID'] == team_id].sort_values('GAME_DATE_REAL', ascending=False)
+        away_games = games_df[games_df['AWAY_TEAM_ID'] == team_id].sort_values('GAME_DATE_REAL', ascending=False)
         
-        if len(team_games) == 0:
+        if len(home_games) == 0 and len(away_games) == 0:
             raise HTTPException(status_code=404, detail="Team not found")
         
-        # Calculate stats with error handling
-        last_5_games = team_games.head(5)
-        last_10_games = team_games.head(10)
+        # Combine all games for this team
+        all_games = []
         
-        # Simple stats calculation
+        # Process home games
+        for _, game in home_games.iterrows():
+            all_games.append({
+                'GAME_DATE_REAL': game['GAME_DATE_REAL'],
+                'Game_ID': game['Game_ID'],
+                'WON': game['HOME_WON'],  # 1 if home team won, 0 if lost
+                'PTS': game['HOME_PTS'],
+                'FG_PCT': game['HOME_FG_PCT'],
+                'FG3_PCT': game['HOME_FG3_PCT'],
+                'FT_PCT': game['HOME_FT_PCT'],
+                'REB': game['HOME_REB'],
+                'AST': game['HOME_AST'],
+                'TOV': game['HOME_TOV']
+            })
+        
+        # Process away games
+        for _, game in away_games.iterrows():
+            all_games.append({
+                'GAME_DATE_REAL': game['GAME_DATE_REAL'],
+                'Game_ID': game['Game_ID'],
+                'WON': 1 - game['HOME_WON'],  # 1 if away team won, 0 if lost
+                'PTS': game['AWAY_PTS'],
+                'FG_PCT': game['AWAY_FG_PCT'],
+                'FG3_PCT': game['AWAY_FG3_PCT'],
+                'FT_PCT': game['AWAY_FT_PCT'],
+                'REB': game['AWAY_REB'],
+                'AST': game['AWAY_AST'],
+                'TOV': game['AWAY_TOV']
+            })
+        
+        # Convert to DataFrame and sort by date
+        team_games_df = pd.DataFrame(all_games).sort_values('GAME_DATE_REAL', ascending=False)
+        
+        # Remove duplicates
+        team_games_df = team_games_df.drop_duplicates(subset=['Game_ID'])
+        
+        # Calculate stats with error handling
         def safe_mean(series):
             try:
                 return float(series.mean()) if len(series) > 0 else 0.0
@@ -339,9 +429,13 @@ async def get_team_stats(team_id: int):
             except:
                 return 0
         
+        # Get last 5 and 10 games
+        last_5_games = team_games_df.head(5)
+        last_10_games = team_games_df.head(10)
+        
         # Last 5 games stats
         last_5_stats = {
-            'wins': safe_sum(last_5_games['WL'].apply(lambda x: 1 if x == 'W' else 0)),
+            'wins': safe_sum(last_5_games['WON']),
             'games': len(last_5_games),
             'PTS': safe_mean(last_5_games['PTS']),
             'FG_PCT': safe_mean(last_5_games['FG_PCT']),
@@ -354,27 +448,25 @@ async def get_team_stats(team_id: int):
         
         # Last 10 games stats
         last_10_stats = {
-            'wins': safe_sum(last_10_games['WL'].apply(lambda x: 1 if x == 'W' else 0)),
+            'wins': safe_sum(last_10_games['WON']),
             'games': len(last_10_games)
         }
         
-        # Season stats (regular season only)
-        season_games = team_games[~team_games['Game_ID'].astype(str).str.startswith('4240')]
+        # Season stats (all games)
         season_stats = {
-            'wins': safe_sum(season_games['WL'].apply(lambda x: 1 if x == 'W' else 0)),
-            'games': len(season_games),
-            'win_pct': safe_mean(season_games['WL'].apply(lambda x: 1 if x == 'W' else 0)),
-            'PTS': safe_mean(season_games['PTS']),
-            'FG_PCT': safe_mean(season_games['FG_PCT']),
-            'FG3_PCT': safe_mean(season_games['FG3_PCT']),
-            'FT_PCT': safe_mean(season_games['FT_PCT'])
+            'wins': safe_sum(team_games_df['WON']),
+            'games': len(team_games_df),
+            'win_pct': safe_mean(team_games_df['WON']),
+            'PTS': safe_mean(team_games_df['PTS']),
+            'FG_PCT': safe_mean(team_games_df['FG_PCT']),
+            'FG3_PCT': safe_mean(team_games_df['FG3_PCT']),
+            'FT_PCT': safe_mean(team_games_df['FT_PCT'])
         }
         
-        # Playoff stats
-        playoff_games = team_games[team_games['Game_ID'].astype(str).str.startswith('4240')]
+        # Playoff stats (placeholder - no playoff data in current dataset)
         playoff_stats = {
-            'wins': safe_sum(playoff_games['WL'].apply(lambda x: 1 if x == 'W' else 0)),
-            'games': len(playoff_games)
+            'wins': 0,
+            'games': 0
         }
         
         return {
@@ -386,49 +478,80 @@ async def get_team_stats(team_id: int):
         }
         
     except Exception as e:
+        print(f"Error in team stats endpoint: {str(e)}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Error getting team stats: {str(e)}")
 
 @app.post("/predict", response_model=PredictionResponse)
 async def predict_game(request: PredictionRequest):
     """Predict the outcome of a game"""
-    global model_cache
-    await ensure_models_loaded()
+    global model_cache, games_df, features
     
-    if model_cache is None:
-        # Try to train models on first prediction request (fast fallback)
-        print("🚀 Training minimal model on first prediction request...")
+    # Ensure data is loaded
+    if games_df is None or features is None:
+        raise HTTPException(status_code=500, detail="Games data not loaded")
+    
+    # Check if we have models, if not train them
+    if model_cache is None or not hasattr(model_cache, 'is_trained') or not model_cache.is_trained:
+        print("🚀 Training models on prediction request...")
         try:
+            # Prepare training data
             X = games_df[features].fillna(0)
             y = games_df['HOME_WON'].astype(int)
             
+            # Create model cache
             model_cache = ModelCache(cache_dir='model_cache')
             
-            # Train only the fastest model (XGBoost) for immediate response
-            print("⚡ Training XGBoost for immediate predictions...")
-            try:
-                from train_model import train_model
-                model, _, _ = train_model(X, y, model_type='xgb')
-                model_cache.models['xgb'] = model
-                model_cache.is_trained = True
-                print("✓ XGBoost trained successfully - API ready!")
-                
-                # Save this model for future use
-                try:
-                    model_cache.save_models()
-                    print("💾 Model cached for future deployments")
-                except:
-                    pass  # Don't fail if saving doesn't work
-                
-            except Exception as e:
-                print(f"❌ XGBoost training failed: {e}")
-                raise HTTPException(status_code=500, detail="Failed to train fallback model")
+            # Train all traditional models for better options
+            print("⚡ Training traditional ML models...")
+            from train_model import train_model
             
+            # Train XGBoost (fastest)
+            print("Training XGBoost...")
+            model, _, _ = train_model(X, y, model_type='xgb')
+            model_cache.models['xgb'] = model
+            print("✓ XGBoost trained successfully!")
+            
+            # Train Random Forest
+            print("Training Random Forest...")
+            model, _, _ = train_model(X, y, model_type='rf')
+            model_cache.models['rf'] = model
+            print("✓ Random Forest trained successfully!")
+            
+            # Train Logistic Regression
+            print("Training Logistic Regression...")
+            model, _, _ = train_model(X, y, model_type='logreg')
+            model_cache.models['logreg'] = model
+            print("✓ Logistic Regression trained successfully!")
+            
+            model_cache.is_trained = True
+            print("🎉 All traditional models trained successfully!")
+            
+            # Try to save model (don't fail if it doesn't work)
+            try:
+                model_cache.save_models()
+                print("💾 Model saved for future use")
+            except Exception as save_error:
+                print(f"⚠️ Could not save model: {save_error}")
+                
         except Exception as e:
-            print(f"❌ Failed to train models: {e}")
-            raise HTTPException(status_code=500, detail="Failed to train models")
+            print(f"❌ Model training failed: {e}")
+            import traceback
+            traceback.print_exc()
+            raise HTTPException(status_code=500, detail=f"Failed to train model: {str(e)}")
     
-    if not hasattr(model_cache, 'is_trained') or not model_cache.is_trained:
-        raise HTTPException(status_code=500, detail="Models not trained")
+    # Verify we have trained models
+    if not model_cache.is_trained or len(model_cache.models) == 0:
+        raise HTTPException(status_code=500, detail="No trained models available")
+    
+    # Check if requested model is available
+    if request.model_type not in model_cache.models:
+        available_models = list(model_cache.models.keys())
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Model '{request.model_type}' not available. Available models: {available_models}"
+        )
     
     if games_df is None:
         raise HTTPException(status_code=500, detail="Games data not loaded")
@@ -583,28 +706,9 @@ def create_prediction_input(home_team_id: int, away_team_id: int, games_df: pd.D
 @app.get("/models")
 async def get_available_models():
     """Get list of available models and their status"""
-    # Don't block on model loading - return current status immediately
-    if model_cache is None:
-        return {
-            "available_models": ["xgb"],  # Always available as fallback
-            "model_descriptions": {
-                'xgb': 'XGBoost (Gradient Boosting) - Fast & Accurate',
-                'rf': 'Random Forest - Robust & Interpretable',
-                'logreg': 'Logistic Regression - Simple & Fast',
-                'pytorch': 'PyTorch Neural Network - Advanced Deep Learning',
-                'tensorflow': 'TensorFlow/Keras - Production-Ready Deep Learning',
-                'ensemble': 'Ensemble (All Models) - Best Performance'
-            },
-            "status": "Models loading in background - XGBoost available immediately",
-            "deep_learning_available": False,
-            "recommended_model": "xgb"
-        }
-    
-    available = model_cache.get_available_models()
-    has_deep_learning = any(model in available for model in ['pytorch', 'tensorflow', 'ensemble'])
-    
+    # Always return XGBoost as available since it can be trained on demand
     return {
-        "available_models": available,
+        "available_models": ["xgb", "rf", "logreg"],  # All traditional models available
         "model_descriptions": {
             'xgb': 'XGBoost (Gradient Boosting) - Fast & Accurate',
             'rf': 'Random Forest - Robust & Interpretable',
@@ -613,9 +717,9 @@ async def get_available_models():
             'tensorflow': 'TensorFlow/Keras - Production-Ready Deep Learning',
             'ensemble': 'Ensemble (All Models) - Best Performance'
         },
-        "status": "All models ready" if has_deep_learning else "Traditional ML ready, deep learning training in background",
-        "deep_learning_available": has_deep_learning,
-        "recommended_model": "ensemble" if "ensemble" in available else "xgb"
+        "status": "Traditional models available - will train on first prediction",
+        "deep_learning_available": False,
+        "recommended_model": "xgb"
     }
 
 @app.post("/models/upgrade")
