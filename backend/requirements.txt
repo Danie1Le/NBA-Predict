@@ -11,6 +11,6 @@ numpy>=1.21.0
 scikit-learn>=1.1.0
 xgboost>=1.7.0
 
-# Deep learning frameworks (for advanced models)
+# Deep learning frameworks (for advanced models) - KEPT FOR RESUME VALUE
 torch>=1.12.0
 tensorflow>=2.10.0

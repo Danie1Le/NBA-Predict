@@ -48,6 +48,18 @@ function App() {
     }
   }, [selectedAwayTeam]);
 
+  const checkBackendHealth = useCallback(async () => {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/health`, {
+        timeout: 5000 // 5 second timeout for health check
+      });
+      return response.data.status === 'healthy';
+    } catch (err) {
+      console.warn('Backend health check failed:', err.message);
+      return false;
+    }
+  }, []);
+
   const loadModels = useCallback(async () => {
     try {
       const modelsResponse = await axios.get(`${API_BASE_URL}/models`, {
@@ -70,50 +82,70 @@ function App() {
     try {
       setLoading(true);
       
-      // Add timeout and retry logic
+      // Check backend health first
+      console.log('Checking backend health...');
+      const isHealthy = await checkBackendHealth();
+      if (!isHealthy) {
+        throw new Error('Backend is not responding to health checks');
+      }
+      console.log('✅ Backend is healthy');
+      
+      // Reduced timeout for faster failure detection
       const axiosConfig = {
-        timeout: 15000, // 15 second timeout
+        timeout: 8000, // 8 second timeout
         headers: {
           'Content-Type': 'application/json'
         }
       };
       
-      const [teamsResponse, modelsResponse] = await Promise.all([
-        axios.get(`${API_BASE_URL}/teams`, axiosConfig),
-        axios.get(`${API_BASE_URL}/models`, axiosConfig)
-      ]);
-      
+      // Load teams first (fast), then models (may be slower)
+      console.log('Loading teams data...');
+      const teamsResponse = await axios.get(`${API_BASE_URL}/teams`, axiosConfig);
       setTeams(teamsResponse.data);
-      // Only show models that are actually available on the backend
-      const backendModels = modelsResponse.data.available_models || [];
-      setAvailableModels(backendModels);
+      console.log('✅ Teams loaded successfully');
       
-      // If deep learning models are not available yet, check again in 30 seconds
-      const hasDeepLearning = backendModels.some(model => 
-        ['pytorch', 'tensorflow', 'ensemble'].includes(model)
-      );
-      
-      if (!hasDeepLearning && backendModels.length > 0) {
-        console.log('Deep learning models not ready yet, will check again in 30 seconds...');
-        setTimeout(() => {
-          loadModels(); // Check for updated models
-        }, 30000);
+      // Load models with separate timeout handling
+      try {
+        console.log('Loading models data...');
+        const modelsResponse = await axios.get(`${API_BASE_URL}/models`, axiosConfig);
+        const backendModels = modelsResponse.data.available_models || [];
+        setAvailableModels(backendModels);
+        console.log('✅ Models loaded:', backendModels);
+        
+        // If deep learning models are not available yet, check again in 30 seconds
+        const hasDeepLearning = backendModels.some(model => 
+          ['pytorch', 'tensorflow', 'ensemble'].includes(model)
+        );
+        
+        if (!hasDeepLearning && backendModels.length > 0) {
+          console.log('Deep learning models not ready yet, will check again in 30 seconds...');
+          setTimeout(() => {
+            loadModels(); // Check for updated models
+          }, 30000);
+        }
+      } catch (modelsErr) {
+        console.warn('Models endpoint failed, using fallback:', modelsErr.message);
+        // Fallback to basic models if models endpoint fails
+        setAvailableModels(['xgb']);
       }
+      
     } catch (err) {
       console.error('Error loading initial data:', err);
       
       // Show more specific error messages
       if (err.code === 'ECONNABORTED') {
-        setError('Backend is taking longer than expected to respond. Please try refreshing the page.');
+        setError('Backend is taking longer than expected to respond. The service might be starting up. Please wait a moment and try again.');
       } else if (err.response?.status === 404) {
         setError('Backend endpoint not found. Please check if the backend is deployed correctly.');
+      } else if (err.response?.status >= 500) {
+        setError('Backend server error. The service might be starting up. Please wait a moment and try again.');
       } else {
-        setError('Failed to load initial data. The backend might be starting up. Please wait a moment and refresh.');
+        setError('Failed to load initial data. Please check your connection and try again.');
       }
     } finally {
       setLoading(false);
     }
-  }, [loadModels]);
+  }, [loadModels, checkBackendHealth]);
 
   const loadTeamStats = async (teamId, type) => {
     try {
@@ -178,16 +210,28 @@ function App() {
   useEffect(() => {
     loadInitialData();
     
-    // Retry loading data every 30 seconds if it failed
+    // Retry loading data with exponential backoff if it failed
+    let retryCount = 0;
+    const maxRetries = 5;
+    
     const retryInterval = setInterval(() => {
-      if (teams.length === 0 && availableModels.length === 0) {
-        console.log('Retrying to load data...');
-        loadInitialData();
+      if (teams.length === 0) {
+        retryCount++;
+        if (retryCount <= maxRetries) {
+          console.log(`Retrying to load data... (attempt ${retryCount}/${maxRetries})`);
+          loadInitialData();
+        } else {
+          console.log('Max retries reached, stopping automatic retries');
+          clearInterval(retryInterval);
+        }
+      } else {
+        // Success - clear the interval
+        clearInterval(retryInterval);
       }
-    }, 30000);
+    }, Math.min(10000 * Math.pow(2, retryCount), 60000)); // Exponential backoff, max 60s
     
     return () => clearInterval(retryInterval);
-  }, [teams.length, availableModels.length, loadInitialData]);
+  }, [teams.length, loadInitialData]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-900 via-purple-900 to-indigo-900">

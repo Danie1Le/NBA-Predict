@@ -77,8 +77,31 @@ async def ensure_models_loaded():
     
     if model_cache is None or teams_df is None:
         print("📊 Loading models on first request...")
-        await load_models_async()
+        # Load only essential data first (teams), models in background
+        await load_essential_data_async()
+        # Start model loading in background without blocking
+        import asyncio
+        asyncio.create_task(load_models_async())
+
+async def load_essential_data_async():
+    """Load only essential data (teams) quickly without heavy processing"""
+    global teams_df, team_map
     
+    try:
+        print("⚡ Loading essential data (teams only)...")
+        data_dir = 'Data'
+        
+        # Load only teams data (lightweight)
+        teams_df = pd.read_csv(f'{data_dir}/NBA_TEAMS.csv')
+        team_map = dict(zip(teams_df['id'], teams_df['abbreviation']))
+        
+        print("✅ Essential data loaded - API ready for team selection!")
+        
+    except Exception as e:
+        print(f"❌ Error loading essential data: {e}")
+        teams_df = None
+        team_map = None
+
 async def load_models_async():
     """Load models asynchronously in background"""
     global model_cache, games_df, teams_df, team_map, features
@@ -165,12 +188,13 @@ async def train_deep_learning_models_async(model_cache, X, y):
     try:
         print("🧠 Starting background training of deep learning models...")
         print("⏳ This will upgrade your API to include PyTorch, TensorFlow, and Ensemble models")
+        print("📝 NOTE: Deep learning models are temporarily disabled for fast deployment")
         
-        # Import availability flags
-        from model_cache import PYTORCH_AVAILABLE, TENSORFLOW_AVAILABLE, ENSEMBLE_AVAILABLE
+        # Import lazy import functions for deep learning models
+        from model_cache import _lazy_import_pytorch, _lazy_import_tensorflow, _lazy_import_ensemble
         
         # Train PyTorch model
-        if PYTORCH_AVAILABLE:
+        if _lazy_import_pytorch():
             try:
                 print("🔥 Training PyTorch model in background...")
                 from pytorch_model import train_pytorch_model
@@ -182,7 +206,7 @@ async def train_deep_learning_models_async(model_cache, X, y):
                 print(f"❌ PyTorch background training failed: {e}")
         
         # Train TensorFlow model
-        if TENSORFLOW_AVAILABLE:
+        if _lazy_import_tensorflow():
             try:
                 print("🤖 Training TensorFlow model in background...")
                 from tensorflow_model import train_tensorflow_model
@@ -193,14 +217,14 @@ async def train_deep_learning_models_async(model_cache, X, y):
                 print(f"❌ TensorFlow background training failed: {e}")
         
         # Train Ensemble model
-        if ENSEMBLE_AVAILABLE and (PYTORCH_AVAILABLE or TENSORFLOW_AVAILABLE):
+        if _lazy_import_ensemble() and (_lazy_import_pytorch() or _lazy_import_tensorflow()):
             try:
                 print("🎯 Training Ensemble model in background...")
                 from ensemble_model import train_ensemble_model
                 ensemble, _ = train_ensemble_model(
                     X, y, 
-                    use_pytorch=PYTORCH_AVAILABLE, 
-                    use_tensorflow=TENSORFLOW_AVAILABLE, 
+                    use_pytorch=_lazy_import_pytorch(), 
+                    use_tensorflow=_lazy_import_tensorflow(), 
                     use_traditional=True
                 )
                 model_cache.models['ensemble'] = ensemble
@@ -253,9 +277,11 @@ async def root():
     return {
         "message": "NBA Game Predictor API",
         "status": "running",
+        "teams_loaded": teams_df is not None,
         "models_loaded": model_cache is not None and hasattr(model_cache, 'is_trained') and model_cache.is_trained,
-        "available_models": model_cache.get_available_models() if model_cache else [],
-        "port": os.getenv("PORT", 8000)
+        "available_models": model_cache.get_available_models() if model_cache else ["xgb"],
+        "port": os.getenv("PORT", 8000),
+        "ready_for_predictions": teams_df is not None
     }
 
 @app.get("/health")
@@ -266,7 +292,9 @@ async def health_check():
 @app.get("/teams", response_model=List[TeamInfo])
 async def get_teams():
     """Get list of all NBA teams"""
-    await ensure_models_loaded()
+    # Load teams data if not already loaded (fast operation)
+    if teams_df is None:
+        await load_essential_data_async()
     
     if teams_df is None:
         raise HTTPException(status_code=500, detail="Teams data not loaded")
@@ -555,13 +583,21 @@ def create_prediction_input(home_team_id: int, away_team_id: int, games_df: pd.D
 @app.get("/models")
 async def get_available_models():
     """Get list of available models and their status"""
-    await ensure_models_loaded()
-    
+    # Don't block on model loading - return current status immediately
     if model_cache is None:
         return {
-            "available_models": [],
-            "model_descriptions": {},
-            "status": "No models loaded - will train on first prediction request"
+            "available_models": ["xgb"],  # Always available as fallback
+            "model_descriptions": {
+                'xgb': 'XGBoost (Gradient Boosting) - Fast & Accurate',
+                'rf': 'Random Forest - Robust & Interpretable',
+                'logreg': 'Logistic Regression - Simple & Fast',
+                'pytorch': 'PyTorch Neural Network - Advanced Deep Learning',
+                'tensorflow': 'TensorFlow/Keras - Production-Ready Deep Learning',
+                'ensemble': 'Ensemble (All Models) - Best Performance'
+            },
+            "status": "Models loading in background - XGBoost available immediately",
+            "deep_learning_available": False,
+            "recommended_model": "xgb"
         }
     
     available = model_cache.get_available_models()

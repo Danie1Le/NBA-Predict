@@ -12,28 +12,62 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from train_model import train_model
 
-# Conditional imports for optional ML frameworks
-try:
-    from pytorch_model import train_pytorch_model, predict_pytorch
-    PYTORCH_AVAILABLE = True
-except ImportError:
-    PYTORCH_AVAILABLE = False
-    train_pytorch_model = None
-    predict_pytorch = None
+# Lazy imports for deep learning frameworks - KEPT FOR RESUME VALUE
+# These will be imported only when needed to prevent startup delays
 
-try:
-    from tensorflow_model import train_tensorflow_model
-    TENSORFLOW_AVAILABLE = True
-except ImportError:
-    TENSORFLOW_AVAILABLE = False
-    train_tensorflow_model = None
+# Initialize as None - will be imported lazily when needed
+train_pytorch_model = None
+predict_pytorch = None
+train_tensorflow_model = None
+train_ensemble_model = None
 
-try:
-    from ensemble_model import train_ensemble_model
-    ENSEMBLE_AVAILABLE = True
-except ImportError:
-    ENSEMBLE_AVAILABLE = False
-    train_ensemble_model = None
+# Availability flags - will be set when modules are actually imported
+PYTORCH_AVAILABLE = None  # None means "not checked yet"
+TENSORFLOW_AVAILABLE = None
+ENSEMBLE_AVAILABLE = None
+
+def _lazy_import_pytorch():
+    """Lazy import PyTorch modules - only when actually needed"""
+    global PYTORCH_AVAILABLE, train_pytorch_model, predict_pytorch
+    if PYTORCH_AVAILABLE is None:  # Only check once
+        try:
+            from pytorch_model import train_pytorch_model, predict_pytorch
+            PYTORCH_AVAILABLE = True
+            print("✅ PyTorch modules loaded successfully")
+        except ImportError as e:
+            PYTORCH_AVAILABLE = False
+            train_pytorch_model = None
+            predict_pytorch = None
+            print(f"⚠️ PyTorch not available: {e}")
+    return PYTORCH_AVAILABLE
+
+def _lazy_import_tensorflow():
+    """Lazy import TensorFlow modules - only when actually needed"""
+    global TENSORFLOW_AVAILABLE, train_tensorflow_model
+    if TENSORFLOW_AVAILABLE is None:  # Only check once
+        try:
+            from tensorflow_model import train_tensorflow_model
+            TENSORFLOW_AVAILABLE = True
+            print("✅ TensorFlow modules loaded successfully")
+        except ImportError as e:
+            TENSORFLOW_AVAILABLE = False
+            train_tensorflow_model = None
+            print(f"⚠️ TensorFlow not available: {e}")
+    return TENSORFLOW_AVAILABLE
+
+def _lazy_import_ensemble():
+    """Lazy import Ensemble modules - only when actually needed"""
+    global ENSEMBLE_AVAILABLE, train_ensemble_model
+    if ENSEMBLE_AVAILABLE is None:  # Only check once
+        try:
+            from ensemble_model import train_ensemble_model
+            ENSEMBLE_AVAILABLE = True
+            print("✅ Ensemble modules loaded successfully")
+        except ImportError as e:
+            ENSEMBLE_AVAILABLE = False
+            train_ensemble_model = None
+            print(f"⚠️ Ensemble not available: {e}")
+    return ENSEMBLE_AVAILABLE
 
 class ModelCache:
     """
@@ -85,7 +119,7 @@ class ModelCache:
         # 2. PyTorch Model
         print("\n2. Training PyTorch Model")
         print("-" * 40)
-        if PYTORCH_AVAILABLE:
+        if _lazy_import_pytorch():
             try:
                 print("Training PyTorch hybrid model...")
                 model, test_data, scaler, train_losses = train_pytorch_model(
@@ -102,7 +136,7 @@ class ModelCache:
         # 3. TensorFlow Model
         print("\n3. Training TensorFlow Model")
         print("-" * 40)
-        if TENSORFLOW_AVAILABLE:
+        if _lazy_import_tensorflow():
             try:
                 print("Training TensorFlow hybrid model...")
                 model, test_data, history = train_tensorflow_model(
@@ -118,13 +152,13 @@ class ModelCache:
         # 4. Ensemble Model
         print("\n4. Training Ensemble Model")
         print("-" * 40)
-        if ENSEMBLE_AVAILABLE:
+        if _lazy_import_ensemble():
             try:
                 print("Training ensemble model...")
                 ensemble, results = train_ensemble_model(
                     X, y, 
-                    use_pytorch=PYTORCH_AVAILABLE, 
-                    use_tensorflow=TENSORFLOW_AVAILABLE, 
+                    use_pytorch=_lazy_import_pytorch(), 
+                    use_tensorflow=_lazy_import_tensorflow(), 
                     use_traditional=True
                 )
                 self.models['ensemble'] = ensemble
@@ -240,18 +274,18 @@ class ModelCache:
         model, scaler = self.get_model(model_type)
         
         if model_type == 'pytorch':
-            if PYTORCH_AVAILABLE and predict_pytorch is not None:
+            if _lazy_import_pytorch() and predict_pytorch is not None:
                 return predict_pytorch(model, X, scaler)
             else:
                 raise ValueError("PyTorch model not available")
         elif model_type == 'tensorflow':
-            if TENSORFLOW_AVAILABLE:
+            if _lazy_import_tensorflow():
                 y_pred, y_proba = model.predict(X)
                 return y_pred, y_proba
             else:
                 raise ValueError("TensorFlow model not available")
         elif model_type == 'ensemble':
-            if ENSEMBLE_AVAILABLE:
+            if _lazy_import_ensemble():
                 return model.predict_ensemble(X)
             else:
                 raise ValueError("Ensemble model not available")
