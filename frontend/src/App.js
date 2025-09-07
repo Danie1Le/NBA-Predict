@@ -432,8 +432,8 @@ function App() {
       <footer className="glass-effect border-t border-white/20 mt-auto">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="text-center text-gray-300">
-            <p>Powered by Machine Learning • XGBoost • PyTorch • TensorFlow</p>
-            <p className="text-sm mt-2">78.5% Accuracy • 0.879 AUC</p>
+            <p>Powered by Machine Learning • XGBoost • Random Forest • Logistic Regression</p>
+            <p className="text-sm mt-2">78.6% Accuracy • 0.837 AUC</p>
           </div>
         </div>
       </footer>

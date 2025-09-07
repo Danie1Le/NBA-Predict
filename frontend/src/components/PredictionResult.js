@@ -132,7 +132,7 @@ const PredictionResult = ({ prediction, onReset }) => {
           <span className="text-sm font-medium">Model Performance</span>
         </div>
         <p className="text-xs text-green-300 mt-1">
-          78.5% Accuracy • 0.879 AUC • 87.3% High Confidence Accuracy
+          78.6% Accuracy • 0.837 AUC • 89.8% High Confidence Accuracy
         </p>
       </div>
     </div>
