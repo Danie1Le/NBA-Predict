@@ -28,7 +28,7 @@ function App() {
   const [selectedHomeTeam, setSelectedHomeTeam] = useState(null);
   const [selectedAwayTeam, setSelectedAwayTeam] = useState(null);
   const [selectedModel, setSelectedModel] = useState('xgb');
-  const [availableModels, setAvailableModels] = useState([]);
+  const [availableModels, setAvailableModels] = useState(['xgb', 'rf', 'logreg']); // Always include logistic regression
   const [prediction, setPrediction] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -66,15 +66,22 @@ function App() {
         timeout: 10000 // 10 second timeout
       });
       const backendModels = modelsResponse.data.available_models || [];
+      
+      // Always ensure logistic regression is available
+      const modelsWithLogReg = [...new Set([...backendModels, 'logreg'])];
+      
       setAvailableModels(prevModels => {
         // If we now have more models, show a notification
-        if (backendModels.length > prevModels.length) {
-          console.log('🎉 New models available:', backendModels);
+        if (modelsWithLogReg.length > prevModels.length) {
+          console.log('🎉 New models available:', modelsWithLogReg);
         }
-        return backendModels;
+        console.log('📊 Available models updated:', modelsWithLogReg);
+        return modelsWithLogReg;
       });
     } catch (err) {
       console.error('Error loading models:', err);
+      // Fallback to default models including logistic regression
+      setAvailableModels(['xgb', 'rf', 'logreg']);
     }
   }, []);
 
@@ -184,6 +191,7 @@ function App() {
       setError(null);
       
       // Add timeout for better UX
+      console.log(`🔮 Making prediction with model: ${selectedModel}`);
       const response = await axios.post(`${API_BASE_URL}/predict`, {
         home_team_id: selectedHomeTeam.id,
         away_team_id: selectedAwayTeam.id,

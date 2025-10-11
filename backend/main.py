@@ -605,8 +605,10 @@ async def predict_game(request: PredictionRequest):
             
             # Train Logistic Regression
             print("Training Logistic Regression...")
-            model, _, _ = train_model(X, y, model_type='logreg')
-            model_cache.models['logreg'] = model
+            model_data, _, _ = train_model(X, y, model_type='logreg')
+            # Logistic regression returns (model, scaler) tuple
+            model_cache.models['logreg'] = model_data[0]  # The actual model
+            model_cache.models['logreg_scaler'] = model_data[1]  # The scaler
             print("✓ Logistic Regression trained successfully!")
             
             model_cache.is_trained = True
@@ -856,9 +858,9 @@ def create_prediction_input(home_team_id: int, away_team_id: int, games_df: pd.D
                 tov_diff > 1
             ]),
             'TIER_MATCHUP': int(pd.cut([home_win_pct], bins=3, labels=[1, 2, 3])[0]) - int(pd.cut([away_win_pct], bins=3, labels=[1, 2, 3])[0]),
-            'HOME_RECENT_FORM': home_pts / (home_win_pct + 0.01),
-            'AWAY_RECENT_FORM': away_pts / (away_win_pct + 0.01),
-            'FORM_DIFF': (home_pts / (home_win_pct + 0.01)) - (away_pts / (away_win_pct + 0.01)),
+            'HOME_RECENT_FORM': np.clip(home_pts / (home_win_pct + 0.01), 0, 1000),
+            'AWAY_RECENT_FORM': np.clip(away_pts / (away_win_pct + 0.01), 0, 1000),
+            'FORM_DIFF': np.clip(home_pts / (home_win_pct + 0.01), 0, 1000) - np.clip(away_pts / (away_win_pct + 0.01), 0, 1000),
             'CLUTCH_FACTOR': ft_pct_diff,
             
             # NEW ADVANCED FEATURES FOR IMPROVED ACCURACY

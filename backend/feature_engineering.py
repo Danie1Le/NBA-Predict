@@ -79,8 +79,9 @@ def create_features(df):
     
     # 9. Recent Performance Trends (last 3 games vs season average)
     # This would require more historical data, but we can simulate with current data
-    df['HOME_RECENT_FORM'] = df['HOME_PTS_rolling5'] / df['HOME_SEASON_WIN_PCT'].replace(0, 0.01)
-    df['AWAY_RECENT_FORM'] = df['AWAY_PTS_rolling5'] / df['AWAY_SEASON_WIN_PCT'].replace(0, 0.01)
+    # Clip extreme values to prevent logistic regression issues
+    df['HOME_RECENT_FORM'] = np.clip(df['HOME_PTS_rolling5'] / df['HOME_SEASON_WIN_PCT'].replace(0, 0.01), 0, 1000)
+    df['AWAY_RECENT_FORM'] = np.clip(df['AWAY_PTS_rolling5'] / df['AWAY_SEASON_WIN_PCT'].replace(0, 0.01), 0, 1000)
     df['FORM_DIFF'] = df['HOME_RECENT_FORM'] - df['AWAY_RECENT_FORM']
     
     # 10. Clutch Performance (close games)
@@ -335,9 +336,9 @@ def create_features(df):
     df['AWAY_DISADVANTAGE_RATIO'] = 0.8 * df['AWAY_MOMENTUM_COMPOSITE'] * df['AWAY_CLUTCH_COMPOSITE']
     df['ADVANTAGE_DISADVANTAGE_DIFF'] = df['HOME_ADVANTAGE_RATIO'] - df['AWAY_DISADVANTAGE_RATIO']
     
-    # 46. Advanced Trend Analysis
-    df['HOME_TREND_ACCELERATION'] = df['HOME_MOMENTUM_COMPOSITE'] * df['HOME_RECENT_FORM'] * df['HOME_SEASON_WIN_PCT']
-    df['AWAY_TREND_ACCELERATION'] = df['AWAY_MOMENTUM_COMPOSITE'] * df['AWAY_RECENT_FORM'] * df['AWAY_SEASON_WIN_PCT']
+    # 46. Advanced Trend Analysis (with clipping to prevent extreme values)
+    df['HOME_TREND_ACCELERATION'] = np.clip(df['HOME_MOMENTUM_COMPOSITE'] * df['HOME_RECENT_FORM'] * df['HOME_SEASON_WIN_PCT'], -1000, 1000)
+    df['AWAY_TREND_ACCELERATION'] = np.clip(df['AWAY_MOMENTUM_COMPOSITE'] * df['AWAY_RECENT_FORM'] * df['AWAY_SEASON_WIN_PCT'], -1000, 1000)
     df['TREND_ACCELERATION_DIFF'] = df['HOME_TREND_ACCELERATION'] - df['AWAY_TREND_ACCELERATION']
     
     # 47. Advanced Composite Metrics for AUC

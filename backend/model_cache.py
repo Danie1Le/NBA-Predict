@@ -5,6 +5,7 @@ Model caching system to pre-train and store all models for fast switching
 import pickle
 import os
 import sys
+import numpy as np
 from pathlib import Path
 
 # Add src directory to path
@@ -172,6 +173,8 @@ class ModelCache:
         
         if model_type == 'pytorch':
             return self.models['pytorch'], self.models.get('pytorch_scaler')
+        elif model_type == 'logreg':  # Logistic regression has its own scaler
+            return self.models['logreg'], self.models.get('logreg_scaler')
         else:
             return self.models[model_type], None
     
@@ -270,7 +273,53 @@ class ModelCache:
                 return model.predict_ensemble(X)
             else:
                 raise ValueError("Ensemble model not available")
-        else:  # Traditional ML
+        elif model_type == 'logreg':  # Logistic Regression needs scaling
+            if scaler is not None:
+                # Clip extreme values before scaling to prevent extreme predictions
+                X_clipped = np.clip(X, -1000, 1000)
+                X_scaled = scaler.transform(X_clipped)
+                y_pred = model.predict(X_scaled)
+                y_proba = model.predict_proba(X_scaled)
+                
+                # Apply probability calibration to prevent extreme predictions
+                if len(y_proba) > 0:
+                    # Soften extreme probabilities
+                    away_prob = y_proba[0][0]
+                    home_prob = y_proba[0][1]
+                    
+                    # If prediction is too extreme, apply smoothing
+                    if away_prob > 0.9 or home_prob > 0.9:
+                        # Apply sigmoid smoothing to reduce extreme predictions
+                        decision_score = model.decision_function(X_scaled)[0]
+                        smoothed_score = np.tanh(decision_score * 0.5)  # Reduce extreme scores
+                        smoothed_away = 1 / (1 + np.exp(-smoothed_score))
+                        smoothed_home = 1 - smoothed_away
+                        
+                        y_proba = np.array([[smoothed_away, smoothed_home]])
+                        y_pred = [1 if smoothed_home > 0.5 else 0]
+                        
+                        print(f"🔧 Applied probability smoothing: {away_prob:.3f}→{smoothed_away:.3f}, {home_prob:.3f}→{smoothed_home:.3f}")
+                
+                # Debug: Print feature values for extreme predictions
+                if len(y_proba) > 0 and (y_proba[0][0] > 0.95 or y_proba[0][1] > 0.95):
+                    print(f"🔍 DEBUG: Extreme logistic regression prediction detected")
+                    print(f"  Away win prob: {y_proba[0][0]:.3f}, Home win prob: {y_proba[0][1]:.3f}")
+                    print(f"  Decision function score: {model.decision_function(X_scaled)[0]:.3f}")
+                    
+                    # Check for extreme feature values
+                    extreme_features = []
+                    for i, val in enumerate(X_scaled[0]):
+                        if abs(val) > 3:  # More than 3 standard deviations
+                            extreme_features.append(f"Feature_{i}: {val:.3f}")
+                    
+                    if extreme_features:
+                        print(f"  Extreme scaled features: {extreme_features[:5]}")  # Show first 5
+                
+            else:
+                y_pred = model.predict(X)
+                y_proba = model.predict_proba(X)
+            return y_pred, y_proba
+        else:  # Other traditional ML (XGBoost, Random Forest)
             y_pred = model.predict(X)
             y_proba = model.predict_proba(X)
             return y_pred, y_proba
