@@ -90,9 +90,11 @@ def add_game_level_features(game_df):
             game_df[f'AWAY_{stat}_rolling5'] = away_rolling
     
     # Add win percentage features
-    for team_col in ['HOME_TEAM_ID', 'AWAY_TEAM_ID']:
-        # Calculate cumulative win percentage
-        game_df[f'{team_col}_WIN_PCT'] = game_df.groupby(team_col)['HOME_WON'].expanding().mean().reset_index(0, drop=True)
+    # For home teams: use HOME_WON directly
+    game_df['HOME_TEAM_ID_WIN_PCT'] = game_df.groupby('HOME_TEAM_ID')['HOME_WON'].expanding().mean().reset_index(0, drop=True)
+    
+    # For away teams: use 1 - HOME_WON (since HOME_WON = 1 means home team won, so away team lost)
+    game_df['AWAY_TEAM_ID_WIN_PCT'] = game_df.groupby('AWAY_TEAM_ID')['HOME_WON'].apply(lambda x: (1 - x).expanding().mean()).reset_index(0, drop=True)
     
     return game_df
 

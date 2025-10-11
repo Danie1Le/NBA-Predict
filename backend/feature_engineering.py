@@ -22,8 +22,8 @@ def create_features(df):
         'AWAY_REB_rolling5': 'AWAY_REB_rolling5',
         'AWAY_AST_rolling5': 'AWAY_AST_rolling5',
         'AWAY_TOV_rolling5': 'AWAY_TOV_rolling5',
-        'HOME_TEAM_ID_WIN_PCT': 'HOME_SEASON_WIN_PCT',
-        'AWAY_TEAM_ID_WIN_PCT': 'AWAY_SEASON_WIN_PCT'
+        'HOME_TEAM_ID_WIN_PCT': 'HOME_TEAM_ID_WIN_PCT',
+        'AWAY_TEAM_ID_WIN_PCT': 'AWAY_TEAM_ID_WIN_PCT'
     }
     
     # Rename columns
@@ -32,8 +32,8 @@ def create_features(df):
     # === ADVANCED FEATURE ENGINEERING ===
     
     # 1. Team Strength Difference Features (most important)
-    df['WIN_PCT_DIFF'] = df['HOME_SEASON_WIN_PCT'] - df['AWAY_SEASON_WIN_PCT']
-    df['WIN_PCT_RATIO'] = df['HOME_SEASON_WIN_PCT'] / (df['AWAY_SEASON_WIN_PCT'] + 0.01)  # Avoid division by zero
+    df['WIN_PCT_DIFF'] = df['HOME_TEAM_ID_WIN_PCT'] - df['AWAY_TEAM_ID_WIN_PCT']
+    df['WIN_PCT_RATIO'] = df['HOME_TEAM_ID_WIN_PCT'] / (df['AWAY_TEAM_ID_WIN_PCT'] + 0.01)  # Avoid division by zero
     df['STRENGTH_ADVANTAGE'] = np.where(df['WIN_PCT_DIFF'] > 0.1, 1, 
                                        np.where(df['WIN_PCT_DIFF'] < -0.1, -1, 0))
     
@@ -56,8 +56,8 @@ def create_features(df):
     df['EFFICIENCY_DIFF'] = df['HOME_EFFICIENCY'] - df['AWAY_EFFICIENCY']
     
     # 5. Momentum Features (recent form)
-    df['HOME_MOMENTUM'] = df['HOME_SEASON_WIN_PCT'] * df['HOME_PTS_rolling5'] / 100
-    df['AWAY_MOMENTUM'] = df['AWAY_SEASON_WIN_PCT'] * df['AWAY_PTS_rolling5'] / 100
+    df['HOME_MOMENTUM'] = df['HOME_TEAM_ID_WIN_PCT'] * df['HOME_PTS_rolling5'] / 100
+    df['AWAY_MOMENTUM'] = df['AWAY_TEAM_ID_WIN_PCT'] * df['AWAY_PTS_rolling5'] / 100
     df['MOMENTUM_DIFF'] = df['HOME_MOMENTUM'] - df['AWAY_MOMENTUM']
     
     # 6. Home Court Advantage Multiplier
@@ -73,15 +73,15 @@ def create_features(df):
     )
     
     # 8. Team Quality Tiers
-    df['HOME_TIER'] = pd.cut(df['HOME_SEASON_WIN_PCT'], bins=3, labels=[1, 2, 3])
-    df['AWAY_TIER'] = pd.cut(df['AWAY_SEASON_WIN_PCT'], bins=3, labels=[1, 2, 3])
+    df['HOME_TIER'] = pd.cut(df['HOME_TEAM_ID_WIN_PCT'], bins=3, labels=[1, 2, 3])
+    df['AWAY_TIER'] = pd.cut(df['AWAY_TEAM_ID_WIN_PCT'], bins=3, labels=[1, 2, 3])
     df['TIER_MATCHUP'] = df['HOME_TIER'].astype(int) - df['AWAY_TIER'].astype(int)
     
     # 9. Recent Performance Trends (last 3 games vs season average)
     # This would require more historical data, but we can simulate with current data
     # Clip extreme values to prevent logistic regression issues
-    df['HOME_RECENT_FORM'] = np.clip(df['HOME_PTS_rolling5'] / df['HOME_SEASON_WIN_PCT'].replace(0, 0.01), 0, 1000)
-    df['AWAY_RECENT_FORM'] = np.clip(df['AWAY_PTS_rolling5'] / df['AWAY_SEASON_WIN_PCT'].replace(0, 0.01), 0, 1000)
+    df['HOME_RECENT_FORM'] = np.clip(df['HOME_PTS_rolling5'] / df['HOME_TEAM_ID_WIN_PCT'].replace(0, 0.01), 0, 1000)
+    df['AWAY_RECENT_FORM'] = np.clip(df['AWAY_PTS_rolling5'] / df['AWAY_TEAM_ID_WIN_PCT'].replace(0, 0.01), 0, 1000)
     df['FORM_DIFF'] = df['HOME_RECENT_FORM'] - df['AWAY_RECENT_FORM']
     
     # 10. Clutch Performance (close games)
@@ -121,19 +121,19 @@ def create_features(df):
     df['CONSISTENCY_DIFF'] = df['HOME_CONSISTENCY'] - df['AWAY_CONSISTENCY']
     
     # 20. Momentum Indicators (recent form vs season average)
-    df['HOME_MOMENTUM_INDICATOR'] = df['HOME_PTS_rolling5'] / (df['HOME_SEASON_WIN_PCT'] * 100 + 1)
-    df['AWAY_MOMENTUM_INDICATOR'] = df['AWAY_PTS_rolling5'] / (df['AWAY_SEASON_WIN_PCT'] * 100 + 1)
+    df['HOME_MOMENTUM_INDICATOR'] = df['HOME_PTS_rolling5'] / (df['HOME_TEAM_ID_WIN_PCT'] * 100 + 1)
+    df['AWAY_MOMENTUM_INDICATOR'] = df['AWAY_PTS_rolling5'] / (df['AWAY_TEAM_ID_WIN_PCT'] * 100 + 1)
     df['MOMENTUM_INDICATOR_DIFF'] = df['HOME_MOMENTUM_INDICATOR'] - df['AWAY_MOMENTUM_INDICATOR']
     
     # 21. Composite Strength Score
     df['HOME_STRENGTH_SCORE'] = (
-        df['HOME_SEASON_WIN_PCT'] * 0.4 +
+        df['HOME_TEAM_ID_WIN_PCT'] * 0.4 +
         df['HOME_PTS_rolling5'] / 120 * 0.3 +
         df['HOME_FG_PCT_rolling5'] * 0.2 +
         df['HOME_REB_rolling5'] / 50 * 0.1
     )
     df['AWAY_STRENGTH_SCORE'] = (
-        df['AWAY_SEASON_WIN_PCT'] * 0.4 +
+        df['AWAY_TEAM_ID_WIN_PCT'] * 0.4 +
         df['AWAY_PTS_rolling5'] / 120 * 0.3 +
         df['AWAY_FG_PCT_rolling5'] * 0.2 +
         df['AWAY_REB_rolling5'] / 50 * 0.1
@@ -143,7 +143,7 @@ def create_features(df):
     # === ULTRA-ADVANCED FEATURES FOR 78%+ ACCURACY ===
     
     # 22. Key Feature Interactions
-    df['WIN_PCT_INTERACTION'] = df['HOME_SEASON_WIN_PCT'] * df['AWAY_SEASON_WIN_PCT']
+    df['WIN_PCT_INTERACTION'] = df['HOME_TEAM_ID_WIN_PCT'] * df['AWAY_TEAM_ID_WIN_PCT']
     df['PTS_PRODUCT'] = df['HOME_PTS_rolling5'] * df['AWAY_PTS_rolling5']
     df['PTS_RATIO'] = df['HOME_PTS_rolling5'] / (df['AWAY_PTS_rolling5'] + 1)
     
@@ -170,8 +170,8 @@ def create_features(df):
     df['CLUTCH_DIFF'] = df['HOME_CLUTCH_FACTOR'] - df['AWAY_CLUTCH_FACTOR']
     
     # 30. Momentum Shift Indicators
-    df['HOME_MOMENTUM_SHIFT'] = df['HOME_PTS_rolling5'] * df['HOME_SEASON_WIN_PCT'] * df['HOME_FG_PCT_rolling5']
-    df['AWAY_MOMENTUM_SHIFT'] = df['AWAY_PTS_rolling5'] * df['AWAY_SEASON_WIN_PCT'] * df['AWAY_FG_PCT_rolling5']
+    df['HOME_MOMENTUM_SHIFT'] = df['HOME_PTS_rolling5'] * df['HOME_TEAM_ID_WIN_PCT'] * df['HOME_FG_PCT_rolling5']
+    df['AWAY_MOMENTUM_SHIFT'] = df['AWAY_PTS_rolling5'] * df['AWAY_TEAM_ID_WIN_PCT'] * df['AWAY_FG_PCT_rolling5']
     df['MOMENTUM_SHIFT_DIFF'] = df['HOME_MOMENTUM_SHIFT'] - df['AWAY_MOMENTUM_SHIFT']
     
     # === FINAL PUSH FEATURES FOR 78%+ ACCURACY ===
@@ -188,14 +188,14 @@ def create_features(df):
         df['HOME_FG_PCT_rolling5'] * 100 * 0.25 +
         df['HOME_REB_rolling5'] * 0.2 +
         df['HOME_AST_rolling5'] * 0.15 +
-        df['HOME_SEASON_WIN_PCT'] * 100 * 0.1
+        df['HOME_TEAM_ID_WIN_PCT'] * 100 * 0.1
     )
     df['AWAY_PERFORMANCE_INDEX'] = (
         df['AWAY_PTS_rolling5'] * 0.3 +
         df['AWAY_FG_PCT_rolling5'] * 100 * 0.25 +
         df['AWAY_REB_rolling5'] * 0.2 +
         df['AWAY_AST_rolling5'] * 0.15 +
-        df['AWAY_SEASON_WIN_PCT'] * 100 * 0.1
+        df['AWAY_TEAM_ID_WIN_PCT'] * 100 * 0.1
     )
     df['PERFORMANCE_INDEX_DIFF'] = df['HOME_PERFORMANCE_INDEX'] - df['AWAY_PERFORMANCE_INDEX']
     
@@ -239,7 +239,7 @@ def create_features(df):
     df['EFFICIENCY_COMPOSITE_DIFF'] = df['HOME_EFFICIENCY_COMPOSITE'] - df['AWAY_EFFICIENCY_COMPOSITE']
     
     # 36. Game Context Features (based on team strength)
-    df['GAME_IMPORTANCE'] = (df['HOME_SEASON_WIN_PCT'] + df['AWAY_SEASON_WIN_PCT']) / 2
+    df['GAME_IMPORTANCE'] = (df['HOME_TEAM_ID_WIN_PCT'] + df['AWAY_TEAM_ID_WIN_PCT']) / 2
     df['HOME_PRESSURE'] = df['GAME_IMPORTANCE'] * df['HOME_COURT_ADVANTAGE']
     df['AWAY_PRESSURE'] = df['GAME_IMPORTANCE'] * 0.8  # Away teams face less pressure
     df['PRESSURE_DIFF'] = df['HOME_PRESSURE'] - df['AWAY_PRESSURE']
@@ -255,8 +255,8 @@ def create_features(df):
     df['DOMINANCE_RATIO_DIFF'] = df['HOME_DOMINANCE_RATIO'] - df['AWAY_DOMINANCE_RATIO']
     
     # 39. Advanced Trend Features
-    df['HOME_TREND_STRENGTH'] = df['HOME_MOMENTUM_COMPOSITE'] * df['HOME_RECENT_FORM'] * df['HOME_SEASON_WIN_PCT']
-    df['AWAY_TREND_STRENGTH'] = df['AWAY_MOMENTUM_COMPOSITE'] * df['AWAY_RECENT_FORM'] * df['AWAY_SEASON_WIN_PCT']
+    df['HOME_TREND_STRENGTH'] = df['HOME_MOMENTUM_COMPOSITE'] * df['HOME_RECENT_FORM'] * df['HOME_TEAM_ID_WIN_PCT']
+    df['AWAY_TREND_STRENGTH'] = df['AWAY_MOMENTUM_COMPOSITE'] * df['AWAY_RECENT_FORM'] * df['AWAY_TEAM_ID_WIN_PCT']
     df['TREND_STRENGTH_DIFF'] = df['HOME_TREND_STRENGTH'] - df['AWAY_TREND_STRENGTH']
     
     # 40. Final Composite Score
@@ -279,13 +279,13 @@ def create_features(df):
     
     # 42. Advanced Ranking Features
     df['HOME_RANKING_SCORE'] = (
-        df['HOME_SEASON_WIN_PCT'] * 0.4 +
+        df['HOME_TEAM_ID_WIN_PCT'] * 0.4 +
         df['HOME_PTS_rolling5'] / 120 * 0.3 +
         df['HOME_FG_PCT_rolling5'] * 0.2 +
         df['HOME_REB_rolling5'] / 50 * 0.1
     )
     df['AWAY_RANKING_SCORE'] = (
-        df['AWAY_SEASON_WIN_PCT'] * 0.4 +
+        df['AWAY_TEAM_ID_WIN_PCT'] * 0.4 +
         df['AWAY_PTS_rolling5'] / 120 * 0.3 +
         df['AWAY_FG_PCT_rolling5'] * 0.2 +
         df['AWAY_REB_rolling5'] / 50 * 0.1
@@ -308,8 +308,8 @@ def create_features(df):
     df['ADVANTAGE_DISADVANTAGE_DIFF'] = df['HOME_ADVANTAGE_RATIO'] - df['AWAY_DISADVANTAGE_RATIO']
     
     # 46. Advanced Trend Analysis (with clipping to prevent extreme values)
-    df['HOME_TREND_ACCELERATION'] = np.clip(df['HOME_MOMENTUM_COMPOSITE'] * df['HOME_RECENT_FORM'] * df['HOME_SEASON_WIN_PCT'], -1000, 1000)
-    df['AWAY_TREND_ACCELERATION'] = np.clip(df['AWAY_MOMENTUM_COMPOSITE'] * df['AWAY_RECENT_FORM'] * df['AWAY_SEASON_WIN_PCT'], -1000, 1000)
+    df['HOME_TREND_ACCELERATION'] = np.clip(df['HOME_MOMENTUM_COMPOSITE'] * df['HOME_RECENT_FORM'] * df['HOME_TEAM_ID_WIN_PCT'], -1000, 1000)
+    df['AWAY_TREND_ACCELERATION'] = np.clip(df['AWAY_MOMENTUM_COMPOSITE'] * df['AWAY_RECENT_FORM'] * df['AWAY_TEAM_ID_WIN_PCT'], -1000, 1000)
     df['TREND_ACCELERATION_DIFF'] = df['HOME_TREND_ACCELERATION'] - df['AWAY_TREND_ACCELERATION']
     
     # 47. Advanced Composite Metrics for AUC

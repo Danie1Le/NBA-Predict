@@ -55,7 +55,7 @@ async def startup_event():
             'HOME_REB_rolling5', 'HOME_AST_rolling5', 'HOME_TOV_rolling5',
             'AWAY_PTS_rolling5', 'AWAY_FG_PCT_rolling5', 'AWAY_FG3_PCT_rolling5', 'AWAY_FT_PCT_rolling5',
             'AWAY_REB_rolling5', 'AWAY_AST_rolling5', 'AWAY_TOV_rolling5',
-            'HOME_SEASON_WIN_PCT', 'AWAY_SEASON_WIN_PCT',
+            'HOME_TEAM_ID_WIN_PCT', 'AWAY_TEAM_ID_WIN_PCT',
             
             # Key difference features
             'WIN_PCT_DIFF', 'WIN_PCT_RATIO', 'STRENGTH_ADVANTAGE',
@@ -546,7 +546,9 @@ async def predict_game(request: PredictionRequest):
         )
         
         if input_data is None:
-            raise HTTPException(status_code=400, detail="Could not create prediction input")
+            raise HTTPException(status_code=500, detail="Failed to create prediction input")
+        
+        print(f"Debug: input_data created with {len(input_data)} features")
         
         # Use the fastest available model if requested model not available
         available_models = model_cache.get_available_models()
@@ -567,6 +569,9 @@ async def predict_game(request: PredictionRequest):
             print(f"⚠️ Requested model '{request.model_type}' not available, using '{model_to_use}'")
         
         # Make prediction (optimized)
+        print(f"Debug: input_data keys: {list(input_data.keys())}")
+        print(f"Debug: features list: {features}")
+        print(f"Debug: missing features: {[f for f in features if f not in input_data]}")
         X_input = pd.DataFrame([input_data])[features]
         
         # Ensure X_input is properly formatted for the model
@@ -642,7 +647,7 @@ def create_prediction_input(home_team_id: int, away_team_id: int, games_df: pd.D
             home_reb = home_latest['HOME_REB_rolling5']
             home_ast = home_latest['HOME_AST_rolling5']
             home_tov = home_latest['HOME_TOV_rolling5']
-            home_win_pct = home_latest['HOME_SEASON_WIN_PCT']
+            home_win_pct = home_latest['HOME_TEAM_ID_WIN_PCT']
         else:
             # Home team was away in their most recent game
             home_pts = home_latest['AWAY_PTS_rolling5']
@@ -652,7 +657,7 @@ def create_prediction_input(home_team_id: int, away_team_id: int, games_df: pd.D
             home_reb = home_latest['AWAY_REB_rolling5']
             home_ast = home_latest['AWAY_AST_rolling5']
             home_tov = home_latest['AWAY_TOV_rolling5']
-            home_win_pct = home_latest['AWAY_SEASON_WIN_PCT']
+            home_win_pct = home_latest['AWAY_TEAM_ID_WIN_PCT']
         
         # For away team: use their stats from their most recent game
         if away_latest['HOME_TEAM_ID'] == away_team_id:
@@ -664,7 +669,7 @@ def create_prediction_input(home_team_id: int, away_team_id: int, games_df: pd.D
             away_reb = away_latest['HOME_REB_rolling5']
             away_ast = away_latest['HOME_AST_rolling5']
             away_tov = away_latest['HOME_TOV_rolling5']
-            away_win_pct = away_latest['HOME_SEASON_WIN_PCT']
+            away_win_pct = away_latest['HOME_TEAM_ID_WIN_PCT']
         else:
             # Away team was away in their most recent game
             away_pts = away_latest['AWAY_PTS_rolling5']
@@ -674,7 +679,7 @@ def create_prediction_input(home_team_id: int, away_team_id: int, games_df: pd.D
             away_reb = away_latest['AWAY_REB_rolling5']
             away_ast = away_latest['AWAY_AST_rolling5']
             away_tov = away_latest['AWAY_TOV_rolling5']
-            away_win_pct = away_latest['AWAY_SEASON_WIN_PCT']
+            away_win_pct = away_latest['AWAY_TEAM_ID_WIN_PCT']
         
         # Create input data for game-level prediction with ALL advanced features
         import numpy as np
@@ -721,8 +726,8 @@ def create_prediction_input(home_team_id: int, away_team_id: int, games_df: pd.D
             'AWAY_REB_rolling5': away_reb,
             'AWAY_AST_rolling5': away_ast,
             'AWAY_TOV_rolling5': away_tov,
-            'HOME_SEASON_WIN_PCT': home_win_pct,
-            'AWAY_SEASON_WIN_PCT': away_win_pct,
+            'HOME_TEAM_ID_WIN_PCT': home_win_pct,
+            'AWAY_TEAM_ID_WIN_PCT': away_win_pct,
             
             # Advanced difference features
             'WIN_PCT_DIFF': win_pct_diff,
@@ -758,9 +763,9 @@ def create_prediction_input(home_team_id: int, away_team_id: int, games_df: pd.D
             'CLUTCH_FACTOR': ft_pct_diff,
             
             # NEW ADVANCED FEATURES FOR IMPROVED ACCURACY
-            'HOME_REST_ADVANTAGE': np.random.normal(0, 0.1),
-            'AWAY_REST_ADVANTAGE': np.random.normal(0, 0.1),
-            'REST_DIFF': np.random.normal(0, 0.1) - np.random.normal(0, 0.1),
+            'HOME_REST_ADVANTAGE': 0.0,  # Removed random rest advantage
+            'AWAY_REST_ADVANTAGE': 0.0,  # Removed random rest advantage
+            'REST_DIFF': 0.0,  # Removed random rest difference
             'H2H_ADVANTAGE': win_pct_diff * 0.3,
             'HOME_DEF_EFFICIENCY': (home_reb + home_tov) / (home_pts + 1),
             'AWAY_DEF_EFFICIENCY': (away_reb + away_tov) / (away_pts + 1),
@@ -821,13 +826,13 @@ def create_prediction_input(home_team_id: int, away_team_id: int, games_df: pd.D
             'HOME_EFFICIENCY_COMPOSITE': home_efficiency * home_strength_score,
             'AWAY_EFFICIENCY_COMPOSITE': away_efficiency * away_strength_score,
             'EFFICIENCY_COMPOSITE_DIFF': (home_efficiency * home_strength_score) - (away_efficiency * away_strength_score),
-            'GAME_IMPORTANCE': np.random.uniform(0.5, 1.5),
-            'HOME_PRESSURE': np.random.uniform(0.5, 1.5) * win_pct_diff * 0.1,
-            'AWAY_PRESSURE': np.random.uniform(0.5, 1.5) * 0.8,
-            'PRESSURE_DIFF': np.random.uniform(0.5, 1.5) * win_pct_diff * 0.1 - np.random.uniform(0.5, 1.5) * 0.8,
+            'GAME_IMPORTANCE': (home_win_pct + away_win_pct) / 2,
+            'HOME_PRESSURE': win_pct_diff * 0.1,
+            'AWAY_PRESSURE': 0.8,
+            'PRESSURE_DIFF': win_pct_diff * 0.1 - 0.8,
             'WIN_PCT_MOMENTUM_INTERACTION': win_pct_diff * momentum_diff,
             'STRENGTH_CLUTCH_INTERACTION': strength_score_diff * ft_pct_diff,
-            'EFFICIENCY_PRESSURE_INTERACTION': efficiency_diff * np.random.uniform(0.5, 1.5),
+            'EFFICIENCY_PRESSURE_INTERACTION': efficiency_diff * 1.0,
             'HOME_DOMINANCE_RATIO': home_pts / (away_pts + 1) * home_fg_pct / (away_fg_pct + 0.01),
             'AWAY_DOMINANCE_RATIO': away_pts / (home_pts + 1) * away_fg_pct / (home_fg_pct + 0.01),
             'DOMINANCE_RATIO_DIFF': (home_pts / (away_pts + 1) * home_fg_pct / (away_fg_pct + 0.01)) - (away_pts / (home_pts + 1) * away_fg_pct / (home_fg_pct + 0.01)),
@@ -839,7 +844,7 @@ def create_prediction_input(home_team_id: int, away_team_id: int, games_df: pd.D
                 ((home_momentum * home_strength_score) - (away_momentum * away_strength_score)) * 0.2 +
                 ((home_ft_pct * home_strength_score) - (away_ft_pct * away_strength_score)) * 0.15 +
                 ((home_efficiency * home_strength_score) - (away_efficiency * away_strength_score)) * 0.15 +
-                np.random.uniform(0.5, 1.5) * 0.1 +
+                1.0 * 0.1 +
                 ((home_pts / (away_pts + 1) * home_fg_pct / (away_fg_pct + 0.01)) - (away_pts / (home_pts + 1) * away_fg_pct / (home_fg_pct + 0.01))) * 0.1 +
                 ((home_momentum * (home_pts / (home_win_pct + 0.01)) * home_win_pct) - (away_momentum * (away_pts / (away_win_pct + 0.01)) * away_win_pct)) * 0.05
             ),
@@ -851,12 +856,12 @@ def create_prediction_input(home_team_id: int, away_team_id: int, games_df: pd.D
             'HOME_RANKING_SCORE': home_strength_score,
             'AWAY_RANKING_SCORE': away_strength_score,
             'RANKING_DIFF': strength_score_diff,
-            'HOME_VARIANCE': np.random.exponential(0.1),
-            'AWAY_VARIANCE': np.random.exponential(0.1),
-            'VARIANCE_DIFF': np.random.exponential(0.1) - np.random.exponential(0.1),
+            'HOME_VARIANCE': 0.1,
+            'AWAY_VARIANCE': 0.1,
+            'VARIANCE_DIFF': 0.0,
             'WIN_PCT_EFFICIENCY_INTERACTION': win_pct_diff * efficiency_diff,
             'MOMENTUM_CLUTCH_INTERACTION': momentum_diff * ft_pct_diff,
-            'STRENGTH_PRESSURE_INTERACTION': strength_score_diff * np.random.uniform(0.5, 1.5),
+            'STRENGTH_PRESSURE_INTERACTION': strength_score_diff * 1.0,
             'HOME_ADVANTAGE_RATIO': win_pct_diff * 0.1 * home_momentum * home_strength_score * home_ft_pct * home_strength_score,
             'AWAY_DISADVANTAGE_RATIO': 0.8 * away_momentum * away_strength_score * away_ft_pct * away_strength_score,
             'ADVANTAGE_DISADVANTAGE_DIFF': (win_pct_diff * 0.1 * home_momentum * home_strength_score * home_ft_pct * home_strength_score) - (0.8 * away_momentum * away_strength_score * away_ft_pct * away_strength_score),
@@ -900,7 +905,7 @@ def create_prediction_input(home_team_id: int, away_team_id: int, games_df: pd.D
                 ((home_momentum * home_strength_score) - (away_momentum * away_strength_score)) * 0.2 +
                 ((home_ft_pct * home_strength_score) - (away_ft_pct * away_strength_score)) * 0.15 +
                 ((home_efficiency * home_strength_score) - (away_efficiency * away_strength_score)) * 0.15 +
-                np.random.uniform(0.5, 1.5) * 0.1 +
+                1.0 * 0.1 +  # Removed random noise
                 ((home_pts / (away_pts + 1) * home_fg_pct / (away_fg_pct + 0.01)) - (away_pts / (home_pts + 1) * away_fg_pct / (home_fg_pct + 0.01))) * 0.1 +
                 ((home_momentum * (home_pts / (home_win_pct + 0.01)) * home_win_pct) - (away_momentum * (away_pts / (away_win_pct + 0.01)) * away_win_pct)) * 0.05
             )
@@ -910,6 +915,8 @@ def create_prediction_input(home_team_id: int, away_team_id: int, games_df: pd.D
         
     except Exception as e:
         print(f"Error creating prediction input: {e}")
+        import traceback
+        traceback.print_exc()
         return None
 
 @app.get("/models")
