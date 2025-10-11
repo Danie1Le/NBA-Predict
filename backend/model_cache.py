@@ -7,49 +7,39 @@ import os
 import sys
 import numpy as np
 from pathlib import Path
+from tensorflow_model import train_tensorflow_model
 
 # Add src directory to path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from train_model import train_model
 
-# Lazy imports for deep learning frameworks - COMMENTED OUT FOR DEPLOYMENT
-# These will be imported only when needed to prevent startup delays
-
-# Initialize as None - will be imported lazily when needed
-train_pytorch_model = None
-predict_pytorch = None
-train_tensorflow_model = None
-train_ensemble_model = None
-
-# Availability flags - will be set when modules are actually imported
-PYTORCH_AVAILABLE = False  # Disabled for deployment
-TENSORFLOW_AVAILABLE = False  # Disabled for deployment
-ENSEMBLE_AVAILABLE = False  # Disabled for deployment
-
+# Lazy imports for deep learning frameworks
 def _lazy_import_pytorch():
     """Lazy import PyTorch modules - only when actually needed"""
-    global PYTORCH_AVAILABLE, train_pytorch_model, predict_pytorch
-    # PyTorch disabled for deployment
-    PYTORCH_AVAILABLE = False
-    print("⚠️ PyTorch disabled for deployment")
-    return PYTORCH_AVAILABLE
+    try:
+        from pytorch_model import train_pytorch_model, predict_pytorch
+        return True
+    except ImportError:
+        print("⚠️ PyTorch not available")
+        return False
 
 def _lazy_import_tensorflow():
     """Lazy import TensorFlow modules - only when actually needed"""
-    global TENSORFLOW_AVAILABLE, train_tensorflow_model
-    # TensorFlow disabled for deployment
-    TENSORFLOW_AVAILABLE = False
-    print("⚠️ TensorFlow disabled for deployment")
-    return TENSORFLOW_AVAILABLE
+    try:
+        return True
+    except ImportError:
+        print("⚠️ TensorFlow not available")
+        return False
 
 def _lazy_import_ensemble():
     """Lazy import Ensemble modules - only when actually needed"""
-    global ENSEMBLE_AVAILABLE, train_ensemble_model
-    # Ensemble disabled for deployment
-    ENSEMBLE_AVAILABLE = False
-    print("⚠️ Ensemble disabled for deployment")
-    return ENSEMBLE_AVAILABLE
+    try:
+        from ensemble_model import NBAEnsemblePredictor
+        return True
+    except ImportError:
+        print("⚠️ Ensemble not available")
+        return False
 
 class ModelCache:
     """
@@ -104,6 +94,7 @@ class ModelCache:
         if _lazy_import_pytorch():
             try:
                 print("Training PyTorch hybrid model...")
+                from pytorch_model import train_pytorch_model
                 model, test_data, scaler, train_losses = train_pytorch_model(
                     X, y, model_type='hybrid', epochs=pytorch_epochs
                 )
@@ -137,12 +128,9 @@ class ModelCache:
         if _lazy_import_ensemble():
             try:
                 print("Training ensemble model...")
-                ensemble, results = train_ensemble_model(
-                    X, y, 
-                    use_pytorch=_lazy_import_pytorch(), 
-                    use_tensorflow=_lazy_import_tensorflow(), 
-                    use_traditional=True
-                )
+                from ensemble_model import NBAEnsemblePredictor
+                ensemble = NBAEnsemblePredictor()
+                ensemble.fit(X, y)
                 self.models['ensemble'] = ensemble
                 print("✓ Ensemble model trained successfully")
             except Exception as e:
@@ -258,7 +246,8 @@ class ModelCache:
         model, scaler = self.get_model(model_type)
         
         if model_type == 'pytorch':
-            if _lazy_import_pytorch() and predict_pytorch is not None:
+            if _lazy_import_pytorch():
+                from pytorch_model import predict_pytorch
                 return predict_pytorch(model, X, scaler)
             else:
                 raise ValueError("PyTorch model not available")

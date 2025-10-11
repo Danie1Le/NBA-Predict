@@ -218,67 +218,6 @@ async def load_models_async():
         games_df = load_and_clean_data(f'{data_dir}/NBA_GAMES.csv')
         games_df = create_features(games_df)
         
-        # Define advanced features for improved predictions
-        features = [
-            # Original features
-            'HOME_PTS_rolling5', 'HOME_FG_PCT_rolling5', 'HOME_FG3_PCT_rolling5', 'HOME_FT_PCT_rolling5',
-            'HOME_REB_rolling5', 'HOME_AST_rolling5', 'HOME_TOV_rolling5',
-            'AWAY_PTS_rolling5', 'AWAY_FG_PCT_rolling5', 'AWAY_FG3_PCT_rolling5', 'AWAY_FT_PCT_rolling5',
-            'AWAY_REB_rolling5', 'AWAY_AST_rolling5', 'AWAY_TOV_rolling5',
-            'HOME_SEASON_WIN_PCT', 'AWAY_SEASON_WIN_PCT',
-            
-            # Advanced difference features
-            'WIN_PCT_DIFF', 'WIN_PCT_RATIO', 'STRENGTH_ADVANTAGE',
-            'PTS_DIFF', 'FG_PCT_DIFF', 'FG3_PCT_DIFF', 'FT_PCT_DIFF',
-            'REB_DIFF', 'AST_DIFF', 'TOV_DIFF',
-            
-            # Efficiency and momentum features
-            'HOME_EFFICIENCY', 'AWAY_EFFICIENCY', 'EFFICIENCY_DIFF',
-            'HOME_MOMENTUM', 'AWAY_MOMENTUM', 'MOMENTUM_DIFF',
-            'HOME_COURT_ADVANTAGE', 'STATS_DOMINANCE', 'TIER_MATCHUP',
-            'HOME_RECENT_FORM', 'AWAY_RECENT_FORM', 'FORM_DIFF', 'CLUTCH_FACTOR',
-            
-            # NEW ADVANCED FEATURES FOR IMPROVED ACCURACY
-            'HOME_REST_ADVANTAGE', 'AWAY_REST_ADVANTAGE', 'REST_DIFF',
-            'H2H_ADVANTAGE', 'HOME_DEF_EFFICIENCY', 'AWAY_DEF_EFFICIENCY', 'DEF_EFFICIENCY_DIFF',
-            'HOME_PACE', 'AWAY_PACE', 'PACE_DIFF', 'THREE_POINT_ADVANTAGE',
-            'TURNOVER_MARGIN', 'REBOUNDING_DOMINANCE', 'FT_ADVANTAGE',
-            'HOME_CONSISTENCY', 'AWAY_CONSISTENCY', 'CONSISTENCY_DIFF',
-            'HOME_MOMENTUM_INDICATOR', 'AWAY_MOMENTUM_INDICATOR', 'MOMENTUM_INDICATOR_DIFF',
-            'HOME_STRENGTH_SCORE', 'AWAY_STRENGTH_SCORE', 'STRENGTH_SCORE_DIFF',
-            
-            # ULTRA-ADVANCED FEATURES FOR 78%+ ACCURACY
-            'WIN_PCT_INTERACTION', 'WIN_PCT_SQUARED_DIFF', 'PTS_PRODUCT', 'PTS_RATIO',
-            'FG_PCT_PRODUCT', 'FG_PCT_GEOMETRIC_MEAN', 'WIN_PCT_DIFF_SQUARED', 'WIN_PCT_DIFF_CUBED',
-            'PTS_DIFF_SQUARED', 'PTS_DIFF_ABS', 'STRENGTH_PRODUCT', 'STRENGTH_HARMONIC_MEAN',
-            'MOMENTUM_PRODUCT', 'MOMENTUM_RATIO', 'GAME_DAY_OF_WEEK', 'GAME_MONTH', 'IS_WEEKEND',
-            'HOME_FATIGUE', 'AWAY_FATIGUE', 'FATIGUE_DIFF', 'TRAVEL_DISTANCE', 'TRAVEL_IMPACT',
-            'WEATHER_IMPACT', 'CROWD_IMPACT', 'REF_BIAS', 'HOME_OFFENSIVE_EFFICIENCY',
-            'AWAY_OFFENSIVE_EFFICIENCY', 'OFFENSIVE_EFFICIENCY_DIFF', 'HOME_CLUTCH_FACTOR',
-            'AWAY_CLUTCH_FACTOR', 'CLUTCH_DIFF', 'HOME_MOMENTUM_SHIFT', 'AWAY_MOMENTUM_SHIFT', 'MOMENTUM_SHIFT_DIFF',
-            
-            # FINAL PUSH FEATURES FOR 78%+ ACCURACY
-            'SYNTHETIC_STRENGTH', 'HOME_PERFORMANCE_INDEX', 'AWAY_PERFORMANCE_INDEX', 'PERFORMANCE_INDEX_DIFF',
-            'HOME_MOMENTUM_COMPOSITE', 'AWAY_MOMENTUM_COMPOSITE', 'MOMENTUM_COMPOSITE_DIFF',
-            'HOME_CLUTCH_COMPOSITE', 'AWAY_CLUTCH_COMPOSITE', 'CLUTCH_COMPOSITE_DIFF',
-            'HOME_EFFICIENCY_COMPOSITE', 'AWAY_EFFICIENCY_COMPOSITE', 'EFFICIENCY_COMPOSITE_DIFF',
-            'GAME_IMPORTANCE', 'HOME_PRESSURE', 'AWAY_PRESSURE', 'PRESSURE_DIFF',
-            'WIN_PCT_MOMENTUM_INTERACTION', 'STRENGTH_CLUTCH_INTERACTION', 'EFFICIENCY_PRESSURE_INTERACTION',
-            'HOME_DOMINANCE_RATIO', 'AWAY_DOMINANCE_RATIO', 'DOMINANCE_RATIO_DIFF',
-            'HOME_TREND_STRENGTH', 'AWAY_TREND_STRENGTH', 'TREND_STRENGTH_DIFF', 'FINAL_COMPOSITE_SCORE',
-            
-            # AUC-OPTIMIZED FEATURES FOR 0.88+ AUC
-            'HOME_WIN_PROBABILITY', 'AWAY_WIN_PROBABILITY', 'PROBABILITY_DIFF',
-            'HOME_RANKING_SCORE', 'AWAY_RANKING_SCORE', 'RANKING_DIFF',
-            'HOME_VARIANCE', 'AWAY_VARIANCE', 'VARIANCE_DIFF',
-            'WIN_PCT_EFFICIENCY_INTERACTION', 'MOMENTUM_CLUTCH_INTERACTION', 'STRENGTH_PRESSURE_INTERACTION',
-            'HOME_ADVANTAGE_RATIO', 'AWAY_DISADVANTAGE_RATIO', 'ADVANTAGE_DISADVANTAGE_DIFF',
-            'HOME_TREND_ACCELERATION', 'AWAY_TREND_ACCELERATION', 'TREND_ACCELERATION_DIFF',
-            'HOME_OVERALL_STRENGTH', 'AWAY_OVERALL_STRENGTH', 'OVERALL_STRENGTH_DIFF',
-            'HOME_WIN_LIKELIHOOD', 'AWAY_WIN_LIKELIHOOD', 'LIKELIHOOD_DIFF',
-            'HOME_CONSISTENCY_SCORE', 'AWAY_CONSISTENCY_SCORE', 'CONSISTENCY_DIFF', 'AUC_OPTIMIZED_SCORE'
-        ]
-        
         # Staged model loading: try full cache first, then traditional models
         try:
             model_cache = ModelCache(cache_dir=cache_dir)
@@ -296,9 +235,6 @@ async def load_models_async():
                 print("🚀 API ready with fast predictions (traditional ML)!")
                 print("💡 Deep learning models will be trained in background...")
                 
-                # Auto-upgrade to deep learning models in background
-                import asyncio
-                asyncio.create_task(upgrade_to_deep_learning_models())
             
             else:
                 print("❌ No cached models found - will train on first request")
@@ -380,31 +316,6 @@ async def train_deep_learning_models_async(model_cache, X, y):
     except Exception as e:
         print(f"❌ Background training error: {e}")
 
-async def upgrade_to_deep_learning_models():
-    """Upgrade from traditional models to include deep learning models"""
-    global model_cache, games_df, features
-    
-    if model_cache is None or games_df is None:
-        print("⚠️ Cannot upgrade models - base models or data not loaded")
-        return
-    
-    # Check if we already have deep learning models
-    available_models = model_cache.get_available_models()
-    has_deep_learning = any(model in available_models for model in ['pytorch', 'tensorflow', 'ensemble'])
-    
-    if has_deep_learning:
-        print("✅ Deep learning models already available!")
-        return
-    
-    print("🚀 Upgrading to deep learning models in background...")
-    
-    # Prepare training data (game-level)
-    X = games_df[features].fillna(0)
-    y = games_df['HOME_WON'].astype(int)
-    
-    # Start background training
-    import asyncio
-    asyncio.create_task(train_deep_learning_models_async(model_cache, X, y))
 
 @app.get("/")
 async def root():
@@ -1069,9 +980,6 @@ async def upgrade_models():
             "available_models": available
         }
     
-    # Trigger upgrade
-    import asyncio
-    asyncio.create_task(upgrade_to_deep_learning_models())
     
     return {
         "success": True,
