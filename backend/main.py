@@ -48,65 +48,48 @@ async def startup_event():
         games_df = load_and_clean_data(f'{data_dir}/NBA_GAMES.csv')
         games_df = create_features(games_df)
         
-        # Define advanced features for improved predictions
+        # Define core features for predictions (simplified and optimized)
         features = [
-            # Original features
+            # Core team stats
             'HOME_PTS_rolling5', 'HOME_FG_PCT_rolling5', 'HOME_FG3_PCT_rolling5', 'HOME_FT_PCT_rolling5',
             'HOME_REB_rolling5', 'HOME_AST_rolling5', 'HOME_TOV_rolling5',
             'AWAY_PTS_rolling5', 'AWAY_FG_PCT_rolling5', 'AWAY_FG3_PCT_rolling5', 'AWAY_FT_PCT_rolling5',
             'AWAY_REB_rolling5', 'AWAY_AST_rolling5', 'AWAY_TOV_rolling5',
-            'HOME_SEASON_WIN_PCT', 'AWAY_SEASON_WIN_PCT',
+            'HOME_TEAM_ID_WIN_PCT', 'AWAY_TEAM_ID_WIN_PCT',
             
-            # Advanced difference features
+            # Key difference features
             'WIN_PCT_DIFF', 'WIN_PCT_RATIO', 'STRENGTH_ADVANTAGE',
             'PTS_DIFF', 'FG_PCT_DIFF', 'FG3_PCT_DIFF', 'FT_PCT_DIFF',
             'REB_DIFF', 'AST_DIFF', 'TOV_DIFF',
             
-            # Efficiency and momentum features
+            # Performance metrics
             'HOME_EFFICIENCY', 'AWAY_EFFICIENCY', 'EFFICIENCY_DIFF',
             'HOME_MOMENTUM', 'AWAY_MOMENTUM', 'MOMENTUM_DIFF',
             'HOME_COURT_ADVANTAGE', 'STATS_DOMINANCE', 'TIER_MATCHUP',
             'HOME_RECENT_FORM', 'AWAY_RECENT_FORM', 'FORM_DIFF', 'CLUTCH_FACTOR',
             
-            # NEW ADVANCED FEATURES FOR IMPROVED ACCURACY
-            'HOME_REST_ADVANTAGE', 'AWAY_REST_ADVANTAGE', 'REST_DIFF',
+            # Advanced features
             'H2H_ADVANTAGE', 'HOME_DEF_EFFICIENCY', 'AWAY_DEF_EFFICIENCY', 'DEF_EFFICIENCY_DIFF',
             'HOME_PACE', 'AWAY_PACE', 'PACE_DIFF', 'THREE_POINT_ADVANTAGE',
             'TURNOVER_MARGIN', 'REBOUNDING_DOMINANCE', 'FT_ADVANTAGE',
             'HOME_CONSISTENCY', 'AWAY_CONSISTENCY', 'CONSISTENCY_DIFF',
-            'HOME_MOMENTUM_INDICATOR', 'AWAY_MOMENTUM_INDICATOR', 'MOMENTUM_INDICATOR_DIFF',
             'HOME_STRENGTH_SCORE', 'AWAY_STRENGTH_SCORE', 'STRENGTH_SCORE_DIFF',
             
-            # ULTRA-ADVANCED FEATURES FOR 78%+ ACCURACY
-            'WIN_PCT_INTERACTION', 'WIN_PCT_SQUARED_DIFF', 'PTS_PRODUCT', 'PTS_RATIO',
-            'FG_PCT_PRODUCT', 'FG_PCT_GEOMETRIC_MEAN', 'WIN_PCT_DIFF_SQUARED', 'WIN_PCT_DIFF_CUBED',
-            'PTS_DIFF_SQUARED', 'PTS_DIFF_ABS', 'STRENGTH_PRODUCT', 'STRENGTH_HARMONIC_MEAN',
-            'MOMENTUM_PRODUCT', 'MOMENTUM_RATIO', 'GAME_DAY_OF_WEEK', 'GAME_MONTH', 'IS_WEEKEND',
-            'HOME_FATIGUE', 'AWAY_FATIGUE', 'FATIGUE_DIFF', 'TRAVEL_DISTANCE', 'TRAVEL_IMPACT',
-            'WEATHER_IMPACT', 'CROWD_IMPACT', 'REF_BIAS', 'HOME_OFFENSIVE_EFFICIENCY',
-            'AWAY_OFFENSIVE_EFFICIENCY', 'OFFENSIVE_EFFICIENCY_DIFF', 'HOME_CLUTCH_FACTOR',
-            'AWAY_CLUTCH_FACTOR', 'CLUTCH_DIFF', 'HOME_MOMENTUM_SHIFT', 'AWAY_MOMENTUM_SHIFT', 'MOMENTUM_SHIFT_DIFF',
+            # Key interaction features
+            'WIN_PCT_INTERACTION', 'PTS_PRODUCT', 'PTS_RATIO',
+            'STRENGTH_PRODUCT', 'MOMENTUM_PRODUCT', 'MOMENTUM_RATIO',
+            'HOME_OFFENSIVE_EFFICIENCY', 'AWAY_OFFENSIVE_EFFICIENCY', 'OFFENSIVE_EFFICIENCY_DIFF',
+            'HOME_CLUTCH_FACTOR', 'AWAY_CLUTCH_FACTOR', 'CLUTCH_DIFF',
             
-            # FINAL PUSH FEATURES FOR 78%+ ACCURACY
-            'SYNTHETIC_STRENGTH', 'HOME_PERFORMANCE_INDEX', 'AWAY_PERFORMANCE_INDEX', 'PERFORMANCE_INDEX_DIFF',
+            # Composite features
             'HOME_MOMENTUM_COMPOSITE', 'AWAY_MOMENTUM_COMPOSITE', 'MOMENTUM_COMPOSITE_DIFF',
-            'HOME_CLUTCH_COMPOSITE', 'AWAY_CLUTCH_COMPOSITE', 'CLUTCH_COMPOSITE_DIFF',
             'HOME_EFFICIENCY_COMPOSITE', 'AWAY_EFFICIENCY_COMPOSITE', 'EFFICIENCY_COMPOSITE_DIFF',
             'GAME_IMPORTANCE', 'HOME_PRESSURE', 'AWAY_PRESSURE', 'PRESSURE_DIFF',
-            'WIN_PCT_MOMENTUM_INTERACTION', 'STRENGTH_CLUTCH_INTERACTION', 'EFFICIENCY_PRESSURE_INTERACTION',
-            'HOME_DOMINANCE_RATIO', 'AWAY_DOMINANCE_RATIO', 'DOMINANCE_RATIO_DIFF',
-            'HOME_TREND_STRENGTH', 'AWAY_TREND_STRENGTH', 'TREND_STRENGTH_DIFF', 'FINAL_COMPOSITE_SCORE',
             
-            # AUC-OPTIMIZED FEATURES FOR 0.83+ AUC
-            'HOME_WIN_PROBABILITY', 'AWAY_WIN_PROBABILITY', 'PROBABILITY_DIFF',
+            # Final optimized features
             'HOME_RANKING_SCORE', 'AWAY_RANKING_SCORE', 'RANKING_DIFF',
             'HOME_VARIANCE', 'AWAY_VARIANCE', 'VARIANCE_DIFF',
-            'WIN_PCT_EFFICIENCY_INTERACTION', 'MOMENTUM_CLUTCH_INTERACTION', 'STRENGTH_PRESSURE_INTERACTION',
-            'HOME_ADVANTAGE_RATIO', 'AWAY_DISADVANTAGE_RATIO', 'ADVANTAGE_DISADVANTAGE_DIFF',
-            'HOME_TREND_ACCELERATION', 'AWAY_TREND_ACCELERATION', 'TREND_ACCELERATION_DIFF',
-            'HOME_OVERALL_STRENGTH', 'AWAY_OVERALL_STRENGTH', 'OVERALL_STRENGTH_DIFF',
-            'HOME_WIN_LIKELIHOOD', 'AWAY_WIN_LIKELIHOOD', 'LIKELIHOOD_DIFF',
-            'HOME_CONSISTENCY_SCORE', 'AWAY_CONSISTENCY_SCORE', 'CONSISTENCY_DIFF', 'AUC_OPTIMIZED_SCORE'
+            'HOME_OVERALL_STRENGTH', 'AWAY_OVERALL_STRENGTH', 'OVERALL_STRENGTH_DIFF'
         ]
         
         # Load model cache
@@ -218,67 +201,6 @@ async def load_models_async():
         games_df = load_and_clean_data(f'{data_dir}/NBA_GAMES.csv')
         games_df = create_features(games_df)
         
-        # Define advanced features for improved predictions
-        features = [
-            # Original features
-            'HOME_PTS_rolling5', 'HOME_FG_PCT_rolling5', 'HOME_FG3_PCT_rolling5', 'HOME_FT_PCT_rolling5',
-            'HOME_REB_rolling5', 'HOME_AST_rolling5', 'HOME_TOV_rolling5',
-            'AWAY_PTS_rolling5', 'AWAY_FG_PCT_rolling5', 'AWAY_FG3_PCT_rolling5', 'AWAY_FT_PCT_rolling5',
-            'AWAY_REB_rolling5', 'AWAY_AST_rolling5', 'AWAY_TOV_rolling5',
-            'HOME_SEASON_WIN_PCT', 'AWAY_SEASON_WIN_PCT',
-            
-            # Advanced difference features
-            'WIN_PCT_DIFF', 'WIN_PCT_RATIO', 'STRENGTH_ADVANTAGE',
-            'PTS_DIFF', 'FG_PCT_DIFF', 'FG3_PCT_DIFF', 'FT_PCT_DIFF',
-            'REB_DIFF', 'AST_DIFF', 'TOV_DIFF',
-            
-            # Efficiency and momentum features
-            'HOME_EFFICIENCY', 'AWAY_EFFICIENCY', 'EFFICIENCY_DIFF',
-            'HOME_MOMENTUM', 'AWAY_MOMENTUM', 'MOMENTUM_DIFF',
-            'HOME_COURT_ADVANTAGE', 'STATS_DOMINANCE', 'TIER_MATCHUP',
-            'HOME_RECENT_FORM', 'AWAY_RECENT_FORM', 'FORM_DIFF', 'CLUTCH_FACTOR',
-            
-            # NEW ADVANCED FEATURES FOR IMPROVED ACCURACY
-            'HOME_REST_ADVANTAGE', 'AWAY_REST_ADVANTAGE', 'REST_DIFF',
-            'H2H_ADVANTAGE', 'HOME_DEF_EFFICIENCY', 'AWAY_DEF_EFFICIENCY', 'DEF_EFFICIENCY_DIFF',
-            'HOME_PACE', 'AWAY_PACE', 'PACE_DIFF', 'THREE_POINT_ADVANTAGE',
-            'TURNOVER_MARGIN', 'REBOUNDING_DOMINANCE', 'FT_ADVANTAGE',
-            'HOME_CONSISTENCY', 'AWAY_CONSISTENCY', 'CONSISTENCY_DIFF',
-            'HOME_MOMENTUM_INDICATOR', 'AWAY_MOMENTUM_INDICATOR', 'MOMENTUM_INDICATOR_DIFF',
-            'HOME_STRENGTH_SCORE', 'AWAY_STRENGTH_SCORE', 'STRENGTH_SCORE_DIFF',
-            
-            # ULTRA-ADVANCED FEATURES FOR 78%+ ACCURACY
-            'WIN_PCT_INTERACTION', 'WIN_PCT_SQUARED_DIFF', 'PTS_PRODUCT', 'PTS_RATIO',
-            'FG_PCT_PRODUCT', 'FG_PCT_GEOMETRIC_MEAN', 'WIN_PCT_DIFF_SQUARED', 'WIN_PCT_DIFF_CUBED',
-            'PTS_DIFF_SQUARED', 'PTS_DIFF_ABS', 'STRENGTH_PRODUCT', 'STRENGTH_HARMONIC_MEAN',
-            'MOMENTUM_PRODUCT', 'MOMENTUM_RATIO', 'GAME_DAY_OF_WEEK', 'GAME_MONTH', 'IS_WEEKEND',
-            'HOME_FATIGUE', 'AWAY_FATIGUE', 'FATIGUE_DIFF', 'TRAVEL_DISTANCE', 'TRAVEL_IMPACT',
-            'WEATHER_IMPACT', 'CROWD_IMPACT', 'REF_BIAS', 'HOME_OFFENSIVE_EFFICIENCY',
-            'AWAY_OFFENSIVE_EFFICIENCY', 'OFFENSIVE_EFFICIENCY_DIFF', 'HOME_CLUTCH_FACTOR',
-            'AWAY_CLUTCH_FACTOR', 'CLUTCH_DIFF', 'HOME_MOMENTUM_SHIFT', 'AWAY_MOMENTUM_SHIFT', 'MOMENTUM_SHIFT_DIFF',
-            
-            # FINAL PUSH FEATURES FOR 78%+ ACCURACY
-            'SYNTHETIC_STRENGTH', 'HOME_PERFORMANCE_INDEX', 'AWAY_PERFORMANCE_INDEX', 'PERFORMANCE_INDEX_DIFF',
-            'HOME_MOMENTUM_COMPOSITE', 'AWAY_MOMENTUM_COMPOSITE', 'MOMENTUM_COMPOSITE_DIFF',
-            'HOME_CLUTCH_COMPOSITE', 'AWAY_CLUTCH_COMPOSITE', 'CLUTCH_COMPOSITE_DIFF',
-            'HOME_EFFICIENCY_COMPOSITE', 'AWAY_EFFICIENCY_COMPOSITE', 'EFFICIENCY_COMPOSITE_DIFF',
-            'GAME_IMPORTANCE', 'HOME_PRESSURE', 'AWAY_PRESSURE', 'PRESSURE_DIFF',
-            'WIN_PCT_MOMENTUM_INTERACTION', 'STRENGTH_CLUTCH_INTERACTION', 'EFFICIENCY_PRESSURE_INTERACTION',
-            'HOME_DOMINANCE_RATIO', 'AWAY_DOMINANCE_RATIO', 'DOMINANCE_RATIO_DIFF',
-            'HOME_TREND_STRENGTH', 'AWAY_TREND_STRENGTH', 'TREND_STRENGTH_DIFF', 'FINAL_COMPOSITE_SCORE',
-            
-            # AUC-OPTIMIZED FEATURES FOR 0.88+ AUC
-            'HOME_WIN_PROBABILITY', 'AWAY_WIN_PROBABILITY', 'PROBABILITY_DIFF',
-            'HOME_RANKING_SCORE', 'AWAY_RANKING_SCORE', 'RANKING_DIFF',
-            'HOME_VARIANCE', 'AWAY_VARIANCE', 'VARIANCE_DIFF',
-            'WIN_PCT_EFFICIENCY_INTERACTION', 'MOMENTUM_CLUTCH_INTERACTION', 'STRENGTH_PRESSURE_INTERACTION',
-            'HOME_ADVANTAGE_RATIO', 'AWAY_DISADVANTAGE_RATIO', 'ADVANTAGE_DISADVANTAGE_DIFF',
-            'HOME_TREND_ACCELERATION', 'AWAY_TREND_ACCELERATION', 'TREND_ACCELERATION_DIFF',
-            'HOME_OVERALL_STRENGTH', 'AWAY_OVERALL_STRENGTH', 'OVERALL_STRENGTH_DIFF',
-            'HOME_WIN_LIKELIHOOD', 'AWAY_WIN_LIKELIHOOD', 'LIKELIHOOD_DIFF',
-            'HOME_CONSISTENCY_SCORE', 'AWAY_CONSISTENCY_SCORE', 'CONSISTENCY_DIFF', 'AUC_OPTIMIZED_SCORE'
-        ]
-        
         # Staged model loading: try full cache first, then traditional models
         try:
             model_cache = ModelCache(cache_dir=cache_dir)
@@ -296,9 +218,6 @@ async def load_models_async():
                 print("🚀 API ready with fast predictions (traditional ML)!")
                 print("💡 Deep learning models will be trained in background...")
                 
-                # Auto-upgrade to deep learning models in background
-                import asyncio
-                asyncio.create_task(upgrade_to_deep_learning_models())
             
             else:
                 print("❌ No cached models found - will train on first request")
@@ -380,31 +299,6 @@ async def train_deep_learning_models_async(model_cache, X, y):
     except Exception as e:
         print(f"❌ Background training error: {e}")
 
-async def upgrade_to_deep_learning_models():
-    """Upgrade from traditional models to include deep learning models"""
-    global model_cache, games_df, features
-    
-    if model_cache is None or games_df is None:
-        print("⚠️ Cannot upgrade models - base models or data not loaded")
-        return
-    
-    # Check if we already have deep learning models
-    available_models = model_cache.get_available_models()
-    has_deep_learning = any(model in available_models for model in ['pytorch', 'tensorflow', 'ensemble'])
-    
-    if has_deep_learning:
-        print("✅ Deep learning models already available!")
-        return
-    
-    print("🚀 Upgrading to deep learning models in background...")
-    
-    # Prepare training data (game-level)
-    X = games_df[features].fillna(0)
-    y = games_df['HOME_WON'].astype(int)
-    
-    # Start background training
-    import asyncio
-    asyncio.create_task(train_deep_learning_models_async(model_cache, X, y))
 
 @app.get("/")
 async def root():
@@ -605,8 +499,10 @@ async def predict_game(request: PredictionRequest):
             
             # Train Logistic Regression
             print("Training Logistic Regression...")
-            model, _, _ = train_model(X, y, model_type='logreg')
-            model_cache.models['logreg'] = model
+            model_data, _, _ = train_model(X, y, model_type='logreg')
+            # Logistic regression returns (model, scaler) tuple
+            model_cache.models['logreg'] = model_data[0]  # The actual model
+            model_cache.models['logreg_scaler'] = model_data[1]  # The scaler
             print("✓ Logistic Regression trained successfully!")
             
             model_cache.is_trained = True
@@ -650,7 +546,9 @@ async def predict_game(request: PredictionRequest):
         )
         
         if input_data is None:
-            raise HTTPException(status_code=400, detail="Could not create prediction input")
+            raise HTTPException(status_code=500, detail="Failed to create prediction input")
+        
+        print(f"Debug: input_data created with {len(input_data)} features")
         
         # Use the fastest available model if requested model not available
         available_models = model_cache.get_available_models()
@@ -671,6 +569,9 @@ async def predict_game(request: PredictionRequest):
             print(f"⚠️ Requested model '{request.model_type}' not available, using '{model_to_use}'")
         
         # Make prediction (optimized)
+        print(f"Debug: input_data keys: {list(input_data.keys())}")
+        print(f"Debug: features list: {features}")
+        print(f"Debug: missing features: {[f for f in features if f not in input_data]}")
         X_input = pd.DataFrame([input_data])[features]
         
         # Ensure X_input is properly formatted for the model
@@ -746,7 +647,7 @@ def create_prediction_input(home_team_id: int, away_team_id: int, games_df: pd.D
             home_reb = home_latest['HOME_REB_rolling5']
             home_ast = home_latest['HOME_AST_rolling5']
             home_tov = home_latest['HOME_TOV_rolling5']
-            home_win_pct = home_latest['HOME_SEASON_WIN_PCT']
+            home_win_pct = home_latest['HOME_TEAM_ID_WIN_PCT']
         else:
             # Home team was away in their most recent game
             home_pts = home_latest['AWAY_PTS_rolling5']
@@ -756,7 +657,7 @@ def create_prediction_input(home_team_id: int, away_team_id: int, games_df: pd.D
             home_reb = home_latest['AWAY_REB_rolling5']
             home_ast = home_latest['AWAY_AST_rolling5']
             home_tov = home_latest['AWAY_TOV_rolling5']
-            home_win_pct = home_latest['AWAY_SEASON_WIN_PCT']
+            home_win_pct = home_latest['AWAY_TEAM_ID_WIN_PCT']
         
         # For away team: use their stats from their most recent game
         if away_latest['HOME_TEAM_ID'] == away_team_id:
@@ -768,7 +669,7 @@ def create_prediction_input(home_team_id: int, away_team_id: int, games_df: pd.D
             away_reb = away_latest['HOME_REB_rolling5']
             away_ast = away_latest['HOME_AST_rolling5']
             away_tov = away_latest['HOME_TOV_rolling5']
-            away_win_pct = away_latest['HOME_SEASON_WIN_PCT']
+            away_win_pct = away_latest['HOME_TEAM_ID_WIN_PCT']
         else:
             # Away team was away in their most recent game
             away_pts = away_latest['AWAY_PTS_rolling5']
@@ -778,7 +679,7 @@ def create_prediction_input(home_team_id: int, away_team_id: int, games_df: pd.D
             away_reb = away_latest['AWAY_REB_rolling5']
             away_ast = away_latest['AWAY_AST_rolling5']
             away_tov = away_latest['AWAY_TOV_rolling5']
-            away_win_pct = away_latest['AWAY_SEASON_WIN_PCT']
+            away_win_pct = away_latest['AWAY_TEAM_ID_WIN_PCT']
         
         # Create input data for game-level prediction with ALL advanced features
         import numpy as np
@@ -825,8 +726,8 @@ def create_prediction_input(home_team_id: int, away_team_id: int, games_df: pd.D
             'AWAY_REB_rolling5': away_reb,
             'AWAY_AST_rolling5': away_ast,
             'AWAY_TOV_rolling5': away_tov,
-            'HOME_SEASON_WIN_PCT': home_win_pct,
-            'AWAY_SEASON_WIN_PCT': away_win_pct,
+            'HOME_TEAM_ID_WIN_PCT': home_win_pct,
+            'AWAY_TEAM_ID_WIN_PCT': away_win_pct,
             
             # Advanced difference features
             'WIN_PCT_DIFF': win_pct_diff,
@@ -856,15 +757,15 @@ def create_prediction_input(home_team_id: int, away_team_id: int, games_df: pd.D
                 tov_diff > 1
             ]),
             'TIER_MATCHUP': int(pd.cut([home_win_pct], bins=3, labels=[1, 2, 3])[0]) - int(pd.cut([away_win_pct], bins=3, labels=[1, 2, 3])[0]),
-            'HOME_RECENT_FORM': home_pts / (home_win_pct + 0.01),
-            'AWAY_RECENT_FORM': away_pts / (away_win_pct + 0.01),
-            'FORM_DIFF': (home_pts / (home_win_pct + 0.01)) - (away_pts / (away_win_pct + 0.01)),
+            'HOME_RECENT_FORM': np.clip(home_pts / (home_win_pct + 0.01), 0, 1000),
+            'AWAY_RECENT_FORM': np.clip(away_pts / (away_win_pct + 0.01), 0, 1000),
+            'FORM_DIFF': np.clip(home_pts / (home_win_pct + 0.01), 0, 1000) - np.clip(away_pts / (away_win_pct + 0.01), 0, 1000),
             'CLUTCH_FACTOR': ft_pct_diff,
             
             # NEW ADVANCED FEATURES FOR IMPROVED ACCURACY
-            'HOME_REST_ADVANTAGE': np.random.normal(0, 0.1),
-            'AWAY_REST_ADVANTAGE': np.random.normal(0, 0.1),
-            'REST_DIFF': np.random.normal(0, 0.1) - np.random.normal(0, 0.1),
+            'HOME_REST_ADVANTAGE': 0.0,  # Removed random rest advantage
+            'AWAY_REST_ADVANTAGE': 0.0,  # Removed random rest advantage
+            'REST_DIFF': 0.0,  # Removed random rest difference
             'H2H_ADVANTAGE': win_pct_diff * 0.3,
             'HOME_DEF_EFFICIENCY': (home_reb + home_tov) / (home_pts + 1),
             'AWAY_DEF_EFFICIENCY': (away_reb + away_tov) / (away_pts + 1),
@@ -901,17 +802,6 @@ def create_prediction_input(home_team_id: int, away_team_id: int, games_df: pd.D
             'STRENGTH_HARMONIC_MEAN': 2 * home_strength_score * away_strength_score / (home_strength_score + away_strength_score + 0.01),
             'MOMENTUM_PRODUCT': home_momentum * away_momentum,
             'MOMENTUM_RATIO': home_momentum / (away_momentum + 0.01),
-            'GAME_DAY_OF_WEEK': np.random.randint(1, 8),  # Simulated day of week
-            'GAME_MONTH': np.random.randint(1, 13),  # Simulated month
-            'IS_WEEKEND': np.random.choice([0, 1]),  # Simulated weekend
-            'HOME_FATIGUE': np.random.normal(0, 0.1),  # Simulated fatigue
-            'AWAY_FATIGUE': np.random.normal(0, 0.1),
-            'FATIGUE_DIFF': np.random.normal(0, 0.1) - np.random.normal(0, 0.1),
-            'TRAVEL_DISTANCE': np.random.exponential(500),  # Simulated travel distance
-            'TRAVEL_IMPACT': np.random.normal(0, 0.05),
-            'WEATHER_IMPACT': np.random.normal(0, 0.02),
-            'CROWD_IMPACT': np.random.normal(0.1, 0.05),
-            'REF_BIAS': np.random.normal(0, 0.02),
             'HOME_OFFENSIVE_EFFICIENCY': home_efficiency,
             'AWAY_OFFENSIVE_EFFICIENCY': away_efficiency,
             'OFFENSIVE_EFFICIENCY_DIFF': efficiency_diff,
@@ -936,13 +826,13 @@ def create_prediction_input(home_team_id: int, away_team_id: int, games_df: pd.D
             'HOME_EFFICIENCY_COMPOSITE': home_efficiency * home_strength_score,
             'AWAY_EFFICIENCY_COMPOSITE': away_efficiency * away_strength_score,
             'EFFICIENCY_COMPOSITE_DIFF': (home_efficiency * home_strength_score) - (away_efficiency * away_strength_score),
-            'GAME_IMPORTANCE': np.random.uniform(0.5, 1.5),
-            'HOME_PRESSURE': np.random.uniform(0.5, 1.5) * win_pct_diff * 0.1,
-            'AWAY_PRESSURE': np.random.uniform(0.5, 1.5) * 0.8,
-            'PRESSURE_DIFF': np.random.uniform(0.5, 1.5) * win_pct_diff * 0.1 - np.random.uniform(0.5, 1.5) * 0.8,
+            'GAME_IMPORTANCE': (home_win_pct + away_win_pct) / 2,
+            'HOME_PRESSURE': win_pct_diff * 0.1,
+            'AWAY_PRESSURE': 0.8,
+            'PRESSURE_DIFF': win_pct_diff * 0.1 - 0.8,
             'WIN_PCT_MOMENTUM_INTERACTION': win_pct_diff * momentum_diff,
             'STRENGTH_CLUTCH_INTERACTION': strength_score_diff * ft_pct_diff,
-            'EFFICIENCY_PRESSURE_INTERACTION': efficiency_diff * np.random.uniform(0.5, 1.5),
+            'EFFICIENCY_PRESSURE_INTERACTION': efficiency_diff * 1.0,
             'HOME_DOMINANCE_RATIO': home_pts / (away_pts + 1) * home_fg_pct / (away_fg_pct + 0.01),
             'AWAY_DOMINANCE_RATIO': away_pts / (home_pts + 1) * away_fg_pct / (home_fg_pct + 0.01),
             'DOMINANCE_RATIO_DIFF': (home_pts / (away_pts + 1) * home_fg_pct / (away_fg_pct + 0.01)) - (away_pts / (home_pts + 1) * away_fg_pct / (home_fg_pct + 0.01)),
@@ -954,7 +844,7 @@ def create_prediction_input(home_team_id: int, away_team_id: int, games_df: pd.D
                 ((home_momentum * home_strength_score) - (away_momentum * away_strength_score)) * 0.2 +
                 ((home_ft_pct * home_strength_score) - (away_ft_pct * away_strength_score)) * 0.15 +
                 ((home_efficiency * home_strength_score) - (away_efficiency * away_strength_score)) * 0.15 +
-                np.random.uniform(0.5, 1.5) * 0.1 +
+                1.0 * 0.1 +
                 ((home_pts / (away_pts + 1) * home_fg_pct / (away_fg_pct + 0.01)) - (away_pts / (home_pts + 1) * away_fg_pct / (home_fg_pct + 0.01))) * 0.1 +
                 ((home_momentum * (home_pts / (home_win_pct + 0.01)) * home_win_pct) - (away_momentum * (away_pts / (away_win_pct + 0.01)) * away_win_pct)) * 0.05
             ),
@@ -966,12 +856,12 @@ def create_prediction_input(home_team_id: int, away_team_id: int, games_df: pd.D
             'HOME_RANKING_SCORE': home_strength_score,
             'AWAY_RANKING_SCORE': away_strength_score,
             'RANKING_DIFF': strength_score_diff,
-            'HOME_VARIANCE': np.random.exponential(0.1),
-            'AWAY_VARIANCE': np.random.exponential(0.1),
-            'VARIANCE_DIFF': np.random.exponential(0.1) - np.random.exponential(0.1),
+            'HOME_VARIANCE': 0.1,
+            'AWAY_VARIANCE': 0.1,
+            'VARIANCE_DIFF': 0.0,
             'WIN_PCT_EFFICIENCY_INTERACTION': win_pct_diff * efficiency_diff,
             'MOMENTUM_CLUTCH_INTERACTION': momentum_diff * ft_pct_diff,
-            'STRENGTH_PRESSURE_INTERACTION': strength_score_diff * np.random.uniform(0.5, 1.5),
+            'STRENGTH_PRESSURE_INTERACTION': strength_score_diff * 1.0,
             'HOME_ADVANTAGE_RATIO': win_pct_diff * 0.1 * home_momentum * home_strength_score * home_ft_pct * home_strength_score,
             'AWAY_DISADVANTAGE_RATIO': 0.8 * away_momentum * away_strength_score * away_ft_pct * away_strength_score,
             'ADVANTAGE_DISADVANTAGE_DIFF': (win_pct_diff * 0.1 * home_momentum * home_strength_score * home_ft_pct * home_strength_score) - (0.8 * away_momentum * away_strength_score * away_ft_pct * away_strength_score),
@@ -1015,7 +905,7 @@ def create_prediction_input(home_team_id: int, away_team_id: int, games_df: pd.D
                 ((home_momentum * home_strength_score) - (away_momentum * away_strength_score)) * 0.2 +
                 ((home_ft_pct * home_strength_score) - (away_ft_pct * away_strength_score)) * 0.15 +
                 ((home_efficiency * home_strength_score) - (away_efficiency * away_strength_score)) * 0.15 +
-                np.random.uniform(0.5, 1.5) * 0.1 +
+                1.0 * 0.1 +  # Removed random noise
                 ((home_pts / (away_pts + 1) * home_fg_pct / (away_fg_pct + 0.01)) - (away_pts / (home_pts + 1) * away_fg_pct / (home_fg_pct + 0.01))) * 0.1 +
                 ((home_momentum * (home_pts / (home_win_pct + 0.01)) * home_win_pct) - (away_momentum * (away_pts / (away_win_pct + 0.01)) * away_win_pct)) * 0.05
             )
@@ -1025,6 +915,8 @@ def create_prediction_input(home_team_id: int, away_team_id: int, games_df: pd.D
         
     except Exception as e:
         print(f"Error creating prediction input: {e}")
+        import traceback
+        traceback.print_exc()
         return None
 
 @app.get("/models")
@@ -1067,9 +959,6 @@ async def upgrade_models():
             "available_models": available
         }
     
-    # Trigger upgrade
-    import asyncio
-    asyncio.create_task(upgrade_to_deep_learning_models())
     
     return {
         "success": True,

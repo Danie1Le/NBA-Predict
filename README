@@ -49,11 +49,14 @@ NBA Predict/
 │ ├── NBA_GAMES.csv
 │ └── NBA_TEAMS.csv
 │
-├── src/
+├── backend/
 │ ├── preprocessing.py
 │ ├── feature_engineering.py
 │ ├── train_model.py
-│ ├── predict.py
+│ ├── model_cache.py
+│ ├── ensemble_model.py
+│ ├── pytorch_model.py
+│ ├── tensorflow_model.py
 │ └── main.py
 │
 ├── app/
@@ -73,14 +76,18 @@ NBA Predict/
    pip install -r requirements.txt
    ```
 
-2. **Run the model training:**
-   ```bash
-   python src/main.py
+2. **Run the backend:**
+   ```
+   cd backend
+   python main.py
    ```
 
-3. **Launch the interactive app:**
+3. **Launch the frontend:**
    ```bash
-   python -m streamlit run app/streamlit_app.py
+   cd frontend
+   npm install
+   npm start
+   ```
    ```
 
 ---

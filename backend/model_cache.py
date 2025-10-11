@@ -5,6 +5,7 @@ Model caching system to pre-train and store all models for fast switching
 import pickle
 import os
 import sys
+import numpy as np
 from pathlib import Path
 
 # Add src directory to path
@@ -12,43 +13,32 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from train_model import train_model
 
-# Lazy imports for deep learning frameworks - COMMENTED OUT FOR DEPLOYMENT
-# These will be imported only when needed to prevent startup delays
-
-# Initialize as None - will be imported lazily when needed
-train_pytorch_model = None
-predict_pytorch = None
-train_tensorflow_model = None
-train_ensemble_model = None
-
-# Availability flags - will be set when modules are actually imported
-PYTORCH_AVAILABLE = False  # Disabled for deployment
-TENSORFLOW_AVAILABLE = False  # Disabled for deployment
-ENSEMBLE_AVAILABLE = False  # Disabled for deployment
-
+# Lazy imports for deep learning frameworks
 def _lazy_import_pytorch():
     """Lazy import PyTorch modules - only when actually needed"""
-    global PYTORCH_AVAILABLE, train_pytorch_model, predict_pytorch
-    # PyTorch disabled for deployment
-    PYTORCH_AVAILABLE = False
-    print("⚠️ PyTorch disabled for deployment")
-    return PYTORCH_AVAILABLE
+    try:
+        from pytorch_model import train_pytorch_model, predict_pytorch
+        return True
+    except ImportError:
+        print("⚠️ PyTorch not available")
+        return False
 
 def _lazy_import_tensorflow():
     """Lazy import TensorFlow modules - only when actually needed"""
-    global TENSORFLOW_AVAILABLE, train_tensorflow_model
-    # TensorFlow disabled for deployment
-    TENSORFLOW_AVAILABLE = False
-    print("⚠️ TensorFlow disabled for deployment")
-    return TENSORFLOW_AVAILABLE
+    try:
+        return True
+    except ImportError:
+        print("⚠️ TensorFlow not available")
+        return False
 
 def _lazy_import_ensemble():
     """Lazy import Ensemble modules - only when actually needed"""
-    global ENSEMBLE_AVAILABLE, train_ensemble_model
-    # Ensemble disabled for deployment
-    ENSEMBLE_AVAILABLE = False
-    print("⚠️ Ensemble disabled for deployment")
-    return ENSEMBLE_AVAILABLE
+    try:
+        from ensemble_model import NBAEnsemblePredictor
+        return True
+    except ImportError:
+        print("⚠️ Ensemble not available")
+        return False
 
 class ModelCache:
     """
@@ -103,6 +93,7 @@ class ModelCache:
         if _lazy_import_pytorch():
             try:
                 print("Training PyTorch hybrid model...")
+                from pytorch_model import train_pytorch_model
                 model, test_data, scaler, train_losses = train_pytorch_model(
                     X, y, model_type='hybrid', epochs=pytorch_epochs
                 )
@@ -119,6 +110,7 @@ class ModelCache:
         print("-" * 40)
         if _lazy_import_tensorflow():
             try:
+                from tensorflow_model import train_tensorflow_model
                 print("Training TensorFlow hybrid model...")
                 model, test_data, history = train_tensorflow_model(
                     X, y, model_type='hybrid', epochs=tensorflow_epochs
@@ -136,12 +128,9 @@ class ModelCache:
         if _lazy_import_ensemble():
             try:
                 print("Training ensemble model...")
-                ensemble, results = train_ensemble_model(
-                    X, y, 
-                    use_pytorch=_lazy_import_pytorch(), 
-                    use_tensorflow=_lazy_import_tensorflow(), 
-                    use_traditional=True
-                )
+                from ensemble_model import NBAEnsemblePredictor
+                ensemble = NBAEnsemblePredictor()
+                ensemble.fit(X, y)
                 self.models['ensemble'] = ensemble
                 print("✓ Ensemble model trained successfully")
             except Exception as e:
@@ -172,6 +161,8 @@ class ModelCache:
         
         if model_type == 'pytorch':
             return self.models['pytorch'], self.models.get('pytorch_scaler')
+        elif model_type == 'logreg':  # Logistic regression has its own scaler
+            return self.models['logreg'], self.models.get('logreg_scaler')
         else:
             return self.models[model_type], None
     
@@ -255,7 +246,8 @@ class ModelCache:
         model, scaler = self.get_model(model_type)
         
         if model_type == 'pytorch':
-            if _lazy_import_pytorch() and predict_pytorch is not None:
+            if _lazy_import_pytorch():
+                from pytorch_model import predict_pytorch
                 return predict_pytorch(model, X, scaler)
             else:
                 raise ValueError("PyTorch model not available")
@@ -270,7 +262,37 @@ class ModelCache:
                 return model.predict_ensemble(X)
             else:
                 raise ValueError("Ensemble model not available")
-        else:  # Traditional ML
+        elif model_type == 'logreg':  # Logistic Regression needs scaling
+            if scaler is not None:
+                # Clip extreme values before scaling to prevent extreme predictions
+                X_clipped = np.clip(X, -1000, 1000)
+                X_scaled = scaler.transform(X_clipped)
+                y_pred = model.predict(X_scaled)
+                y_proba = model.predict_proba(X_scaled)
+                
+                # Apply probability calibration to prevent extreme predictions
+                if len(y_proba) > 0:
+                    # Soften extreme probabilities
+                    away_prob = y_proba[0][0]
+                    home_prob = y_proba[0][1]
+                    
+                    # If prediction is too extreme, apply smoothing
+                    if away_prob > 0.9 or home_prob > 0.9:
+                        # Apply sigmoid smoothing to reduce extreme predictions
+                        decision_score = model.decision_function(X_scaled)[0]
+                        smoothed_score = np.tanh(decision_score * 0.5)  # Reduce extreme scores
+                        smoothed_away = 1 / (1 + np.exp(-smoothed_score))
+                        smoothed_home = 1 - smoothed_away
+                        
+                        y_proba = np.array([[smoothed_away, smoothed_home]])
+                        y_pred = [1 if smoothed_home > 0.5 else 0]
+                        
+                
+            else:
+                y_pred = model.predict(X)
+                y_proba = model.predict_proba(X)
+            return y_pred, y_proba
+        else:  # Other traditional ML (XGBoost, Random Forest)
             y_pred = model.predict(X)
             y_proba = model.predict_proba(X)
             return y_pred, y_proba
