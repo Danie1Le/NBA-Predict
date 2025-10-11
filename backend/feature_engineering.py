@@ -89,16 +89,9 @@ def create_features(df):
     
     # === ADVANCED FEATURES FOR IMPROVED ACCURACY ===
     
-    # 11. Rest Days Advantage (simulated - would need actual game dates)
-    # For now, we'll use a random factor to simulate rest advantage
-    np.random.seed(42)  # For reproducibility
-    df['HOME_REST_ADVANTAGE'] = np.random.normal(0, 0.1, len(df))
-    df['AWAY_REST_ADVANTAGE'] = np.random.normal(0, 0.1, len(df))
-    df['REST_DIFF'] = df['HOME_REST_ADVANTAGE'] - df['AWAY_REST_ADVANTAGE']
-    
-    # 12. Head-to-Head Performance (simulated based on team strength)
+    # 11. Head-to-Head Performance (based on team strength)
     # Stronger teams tend to win more head-to-head matchups
-    df['H2H_ADVANTAGE'] = df['WIN_PCT_DIFF'] * 0.3  # Simulate H2H based on overall strength
+    df['H2H_ADVANTAGE'] = df['WIN_PCT_DIFF'] * 0.3
     
     # 13. Defensive Efficiency
     df['HOME_DEF_EFFICIENCY'] = (df['HOME_REB_rolling5'] + df['HOME_TOV_rolling5']) / (df['HOME_PTS_rolling5'] + 1)
@@ -122,8 +115,7 @@ def create_features(df):
     # 18. Free Throw Advantage (clutch factor)
     df['FT_ADVANTAGE'] = (df['HOME_FT_PCT_rolling5'] - df['AWAY_FT_PCT_rolling5']) * 1.5
     
-    # 19. Consistency Metrics (lower variance = more consistent)
-    # We'll simulate this since we don't have game-by-game variance
+    # 19. Consistency Metrics (based on rolling averages)
     df['HOME_CONSISTENCY'] = 1 / (df['HOME_PTS_rolling5'].std() + 1) if len(df) > 1 else 1
     df['AWAY_CONSISTENCY'] = 1 / (df['AWAY_PTS_rolling5'].std() + 1) if len(df) > 1 else 1
     df['CONSISTENCY_DIFF'] = df['HOME_CONSISTENCY'] - df['AWAY_CONSISTENCY']
@@ -150,13 +142,10 @@ def create_features(df):
     
     # === ULTRA-ADVANCED FEATURES FOR 78%+ ACCURACY ===
     
-    # 22. Feature Interactions (key for ensemble performance)
+    # 22. Key Feature Interactions
     df['WIN_PCT_INTERACTION'] = df['HOME_SEASON_WIN_PCT'] * df['AWAY_SEASON_WIN_PCT']
-    df['WIN_PCT_SQUARED_DIFF'] = (df['HOME_SEASON_WIN_PCT'] - df['AWAY_SEASON_WIN_PCT']) ** 2
     df['PTS_PRODUCT'] = df['HOME_PTS_rolling5'] * df['AWAY_PTS_rolling5']
     df['PTS_RATIO'] = df['HOME_PTS_rolling5'] / (df['AWAY_PTS_rolling5'] + 1)
-    df['FG_PCT_PRODUCT'] = df['HOME_FG_PCT_rolling5'] * df['AWAY_FG_PCT_rolling5']
-    df['FG_PCT_GEOMETRIC_MEAN'] = np.sqrt(df['HOME_FG_PCT_rolling5'] * df['AWAY_FG_PCT_rolling5'])
     
     # 23. Polynomial Features
     df['WIN_PCT_DIFF_SQUARED'] = df['WIN_PCT_DIFF'] ** 2
@@ -164,29 +153,11 @@ def create_features(df):
     df['PTS_DIFF_SQUARED'] = df['PTS_DIFF'] ** 2
     df['PTS_DIFF_ABS'] = np.abs(df['PTS_DIFF'])
     
-    # 24. Advanced Statistical Features
+    # 24. Key Statistical Features
     df['STRENGTH_PRODUCT'] = df['HOME_STRENGTH_SCORE'] * df['AWAY_STRENGTH_SCORE']
-    df['STRENGTH_HARMONIC_MEAN'] = 2 / (1/df['HOME_STRENGTH_SCORE'] + 1/df['AWAY_STRENGTH_SCORE'])
     df['MOMENTUM_PRODUCT'] = df['HOME_MOMENTUM'] * df['AWAY_MOMENTUM']
     df['MOMENTUM_RATIO'] = df['HOME_MOMENTUM'] / (df['AWAY_MOMENTUM'] + 0.01)
     
-    # 25. Time-based Features (simulated)
-    np.random.seed(42)
-    df['GAME_DAY_OF_WEEK'] = np.random.randint(0, 7, len(df))
-    df['GAME_MONTH'] = np.random.randint(1, 13, len(df))
-    df['IS_WEEKEND'] = (df['GAME_DAY_OF_WEEK'] >= 5).astype(int)
-    
-    # 26. Fatigue and Travel Impact
-    df['HOME_FATIGUE'] = np.random.exponential(0.1, len(df))
-    df['AWAY_FATIGUE'] = np.random.exponential(0.1, len(df))
-    df['FATIGUE_DIFF'] = df['HOME_FATIGUE'] - df['AWAY_FATIGUE']
-    df['TRAVEL_DISTANCE'] = np.random.exponential(500, len(df))
-    df['TRAVEL_IMPACT'] = df['TRAVEL_DISTANCE'] * 0.0001
-    
-    # 27. Environmental Factors
-    df['WEATHER_IMPACT'] = np.random.normal(0, 0.05, len(df))
-    df['CROWD_IMPACT'] = np.random.normal(0.02, 0.01, len(df))
-    df['REF_BIAS'] = np.random.normal(0, 0.01, len(df))
     
     # 28. Advanced Efficiency Metrics
     df['HOME_OFFENSIVE_EFFICIENCY'] = df['HOME_PTS_rolling5'] / (df['HOME_FGA_rolling5'] + 1) if 'HOME_FGA_rolling5' in df.columns else df['HOME_PTS_rolling5'] / 80
@@ -267,8 +238,8 @@ def create_features(df):
     )
     df['EFFICIENCY_COMPOSITE_DIFF'] = df['HOME_EFFICIENCY_COMPOSITE'] - df['AWAY_EFFICIENCY_COMPOSITE']
     
-    # 36. Game Context Features
-    df['GAME_IMPORTANCE'] = np.random.uniform(0.5, 1.5, len(df))  # Simulated game importance
+    # 36. Game Context Features (based on team strength)
+    df['GAME_IMPORTANCE'] = (df['HOME_SEASON_WIN_PCT'] + df['AWAY_SEASON_WIN_PCT']) / 2
     df['HOME_PRESSURE'] = df['GAME_IMPORTANCE'] * df['HOME_COURT_ADVANTAGE']
     df['AWAY_PRESSURE'] = df['GAME_IMPORTANCE'] * 0.8  # Away teams face less pressure
     df['PRESSURE_DIFF'] = df['HOME_PRESSURE'] - df['AWAY_PRESSURE']
@@ -321,9 +292,9 @@ def create_features(df):
     )
     df['RANKING_DIFF'] = df['HOME_RANKING_SCORE'] - df['AWAY_RANKING_SCORE']
     
-    # 43. Advanced Statistical Moments
-    df['HOME_VARIANCE'] = np.random.exponential(0.1, len(df))  # Simulated variance
-    df['AWAY_VARIANCE'] = np.random.exponential(0.1, len(df))
+    # 43. Advanced Statistical Moments (based on actual data variance)
+    df['HOME_VARIANCE'] = df['HOME_PTS_rolling5'].rolling(window=5).std().fillna(0.1)
+    df['AWAY_VARIANCE'] = df['AWAY_PTS_rolling5'].rolling(window=5).std().fillna(0.1)
     df['VARIANCE_DIFF'] = df['HOME_VARIANCE'] - df['AWAY_VARIANCE']
     
     # 44. Advanced Interaction Terms for AUC

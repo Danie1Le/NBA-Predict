@@ -25,10 +25,6 @@ RUN mkdir -p model_cache
 ENV PYTHONUNBUFFERED=1
 ENV OMP_NUM_THREADS=1
 ENV MKL_NUM_THREADS=1
-ENV PREBUILD_TRADITIONAL_ONLY=1
-
-# Pre-build only traditional models during Docker build (memory efficient)
-RUN python prebuild_models.py
 
 # Expose port (Render will set PORT environment variable)
 EXPOSE 8000
@@ -37,5 +33,5 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:${PORT:-8000}/ || exit 1
 
-# Run the application with optimized startup
-CMD ["python", "start_optimized.py"]
+# Run the application
+CMD ["python", "main.py"]

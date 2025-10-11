@@ -10,6 +10,7 @@ numpy>=1.21.0
 # Traditional ML (fast startup models)
 scikit-learn>=1.1.0
 xgboost>=1.7.0
+joblib>=1.2.0
 
 # Deep learning frameworks (for advanced models) - COMMENTED OUT FOR DEPLOYMENT
 # torch>=1.12.0

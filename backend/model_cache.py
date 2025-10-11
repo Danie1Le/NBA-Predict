@@ -7,7 +7,6 @@ import os
 import sys
 import numpy as np
 from pathlib import Path
-from tensorflow_model import train_tensorflow_model
 
 # Add src directory to path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -111,6 +110,7 @@ class ModelCache:
         print("-" * 40)
         if _lazy_import_tensorflow():
             try:
+                from tensorflow_model import train_tensorflow_model
                 print("Training TensorFlow hybrid model...")
                 model, test_data, history = train_tensorflow_model(
                     X, y, model_type='hybrid', epochs=tensorflow_epochs
@@ -287,22 +287,6 @@ class ModelCache:
                         y_proba = np.array([[smoothed_away, smoothed_home]])
                         y_pred = [1 if smoothed_home > 0.5 else 0]
                         
-                        print(f"🔧 Applied probability smoothing: {away_prob:.3f}→{smoothed_away:.3f}, {home_prob:.3f}→{smoothed_home:.3f}")
-                
-                # Debug: Print feature values for extreme predictions
-                if len(y_proba) > 0 and (y_proba[0][0] > 0.95 or y_proba[0][1] > 0.95):
-                    print(f"🔍 DEBUG: Extreme logistic regression prediction detected")
-                    print(f"  Away win prob: {y_proba[0][0]:.3f}, Home win prob: {y_proba[0][1]:.3f}")
-                    print(f"  Decision function score: {model.decision_function(X_scaled)[0]:.3f}")
-                    
-                    # Check for extreme feature values
-                    extreme_features = []
-                    for i, val in enumerate(X_scaled[0]):
-                        if abs(val) > 3:  # More than 3 standard deviations
-                            extreme_features.append(f"Feature_{i}: {val:.3f}")
-                    
-                    if extreme_features:
-                        print(f"  Extreme scaled features: {extreme_features[:5]}")  # Show first 5
                 
             else:
                 y_pred = model.predict(X)

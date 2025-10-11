@@ -20,8 +20,6 @@ const getApiUrl = () => {
 const API_BASE_URL = getApiUrl();
 
 // Debug logging
-console.log('🌐 API Base URL:', API_BASE_URL);
-console.log('🏠 Hostname:', window.location.hostname);
 
 function App() {
   const [teams, setTeams] = useState([]);
@@ -73,9 +71,8 @@ function App() {
       setAvailableModels(prevModels => {
         // If we now have more models, show a notification
         if (modelsWithLogReg.length > prevModels.length) {
-          console.log('🎉 New models available:', modelsWithLogReg);
+          // Could show notification here if needed
         }
-        console.log('📊 Available models updated:', modelsWithLogReg);
         return modelsWithLogReg;
       });
     } catch (err) {
@@ -90,13 +87,10 @@ function App() {
       setLoading(true);
       
       // Check backend health first
-      console.log('Checking backend health...');
       const isHealthy = await checkBackendHealth();
       if (!isHealthy) {
         throw new Error('Backend is not responding to health checks');
       }
-      console.log('✅ Backend is healthy');
-      
       // Reduced timeout for faster failure detection
       const axiosConfig = {
         timeout: 8000, // 8 second timeout
@@ -106,18 +100,14 @@ function App() {
       };
       
       // Load teams first (fast), then models (may be slower)
-      console.log('Loading teams data...');
       const teamsResponse = await axios.get(`${API_BASE_URL}/teams`, axiosConfig);
       setTeams(teamsResponse.data);
-      console.log('✅ Teams loaded successfully');
       
       // Load models with separate timeout handling
       try {
-        console.log('Loading models data...');
         const modelsResponse = await axios.get(`${API_BASE_URL}/models`, axiosConfig);
         const backendModels = modelsResponse.data.available_models || [];
         setAvailableModels(backendModels);
-        console.log('✅ Models loaded:', backendModels);
         
         // If deep learning models are not available yet, check again in 30 seconds
         const hasDeepLearning = backendModels.some(model => 
@@ -125,13 +115,11 @@ function App() {
         );
         
         if (!hasDeepLearning && backendModels.length > 0) {
-          console.log('Deep learning models not ready yet, will check again in 30 seconds...');
           setTimeout(() => {
             loadModels(); // Check for updated models
           }, 30000);
         }
       } catch (modelsErr) {
-        console.warn('Models endpoint failed, using fallback:', modelsErr.message);
         // Fallback to basic models if models endpoint fails
         setAvailableModels(['xgb']);
       }
@@ -156,9 +144,7 @@ function App() {
 
   const loadTeamStats = async (teamId, type) => {
     try {
-      console.log(`Loading ${type} team stats for team ID: ${teamId}`);
       const response = await axios.get(`${API_BASE_URL}/team-stats/${teamId}`);
-      console.log(`${type} team stats response:`, response.data);
       if (type === 'home') {
         setHomeTeamStats(response.data);
       } else {
@@ -191,7 +177,6 @@ function App() {
       setError(null);
       
       // Add timeout for better UX
-      console.log(`🔮 Making prediction with model: ${selectedModel}`);
       const response = await axios.post(`${API_BASE_URL}/predict`, {
         home_team_id: selectedHomeTeam.id,
         away_team_id: selectedAwayTeam.id,
@@ -234,10 +219,8 @@ function App() {
       if (teams.length === 0) {
         retryCount++;
         if (retryCount <= maxRetries) {
-          console.log(`Retrying to load data... (attempt ${retryCount}/${maxRetries})`);
           loadInitialData();
         } else {
-          console.log('Max retries reached, stopping automatic retries');
           clearInterval(retryInterval);
         }
       } else {

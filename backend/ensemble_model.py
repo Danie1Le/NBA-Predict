@@ -1,19 +1,24 @@
 import numpy as np
 import pandas as pd
 from sklearn.ensemble import VotingClassifier
-from sklearn.metrics import accuracy_score, roc_auc_score
-from sklearn.model_selection import cross_val_score
+from sklearn.metrics import accuracy_score, roc_auc_score, classification_report
+import joblib
 
 # Import our custom models
 try:
     from .train_model import train_model
     from .pytorch_model import train_pytorch_model, predict_pytorch
     from .tensorflow_model import train_tensorflow_model
+    import torch
 except ImportError:
     # Fallback for when running as script
     from train_model import train_model
     from pytorch_model import train_pytorch_model, predict_pytorch
     from tensorflow_model import train_tensorflow_model
+    try:
+        import torch
+    except ImportError:
+        torch = None
 
 class NBAEnsemblePredictor:
     """
@@ -301,7 +306,7 @@ class NBAEnsemblePredictor:
                 joblib.dump(model, f"{filepath}_{name}.pkl")
         
         # Save PyTorch model
-        if 'pytorch' in self.models:
+        if 'pytorch' in self.models and torch is not None:
             torch.save(self.models['pytorch'].state_dict(), f"{filepath}_pytorch.pth")
             joblib.dump(self.models['pytorch_scaler'], f"{filepath}_pytorch_scaler.pkl")
         
