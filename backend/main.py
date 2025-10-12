@@ -9,8 +9,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 # Import our modular components
-from data_loader import DataLoader
-from prediction_service import PredictionService
+from dataLoader import DataLoader
+from predictionService import PredictionService
 from routes import create_routes
 
 
@@ -59,9 +59,9 @@ app = create_app()
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 8000))  # Render default port is 8000
     
-    print(f"🚀 Starting NBA Game Predictor API on port {port}")
-    print(f"📁 Current working directory: {os.getcwd()}")
-    print(f"📄 Script location: {__file__}")
+    print(f"Starting NBA Game Predictor API on port {port}")
+    print(f"Current working directory: {os.getcwd()}")
+    print(f"Script location: {__file__}")
     
     # Run the app - disable reload in production
     uvicorn.run(

@@ -5,7 +5,7 @@ Prediction service for NBA Game Predictor - Fixed version
 import pandas as pd
 import numpy as np
 from typing import Dict, Optional
-from train_model import train_model
+from trainModel import train_model
 
 
 class PredictionService:

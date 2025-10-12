@@ -5,8 +5,8 @@ API routes for NBA Game Predictor
 from fastapi import APIRouter, HTTPException
 from typing import List
 from models import PredictionRequest, PredictionResponse, TeamInfo, TeamStats
-from data_loader import DataLoader
-from prediction_service import PredictionService
+from dataLoader import DataLoader
+from predictionService import PredictionService
 
 
 def create_routes(data_loader: DataLoader, prediction_service: PredictionService) -> APIRouter:
