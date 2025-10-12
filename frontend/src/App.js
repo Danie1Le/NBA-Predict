@@ -333,14 +333,14 @@ function App() {
                   {homeTeamStats && selectedHomeTeam ? (
                     <TeamStats
                       teamStats={homeTeamStats}
-                      teamName={selectedHomeTeam.full_name}
+                      teamName={selectedHomeTeam.name}
                       isHome={true}
                     />
                   ) : selectedHomeTeam ? (
                     <div className="p-4 rounded-lg border-2 border-blue-500/50 bg-blue-500/10">
                       <div className="text-center text-gray-400">
                         <BarChart3 className="h-8 w-8 mx-auto mb-2" />
-                        <p>Loading {selectedHomeTeam.full_name} stats...</p>
+                        <p>Loading {selectedHomeTeam.name} stats...</p>
                       </div>
                     </div>
                   ) : (
@@ -355,14 +355,14 @@ function App() {
                   {awayTeamStats && selectedAwayTeam ? (
                     <TeamStats
                       teamStats={awayTeamStats}
-                      teamName={selectedAwayTeam.full_name}
+                      teamName={selectedAwayTeam.name}
                       isHome={false}
                     />
                   ) : selectedAwayTeam ? (
                     <div className="p-4 rounded-lg border-2 border-red-500/50 bg-red-500/10">
                       <div className="text-center text-gray-400">
                         <BarChart3 className="h-8 w-8 mx-auto mb-2" />
-                        <p>Loading {selectedAwayTeam.full_name} stats...</p>
+                        <p>Loading {selectedAwayTeam.name} stats...</p>
                       </div>
                     </div>
                   ) : (

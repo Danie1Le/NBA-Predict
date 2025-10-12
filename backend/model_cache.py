@@ -82,7 +82,13 @@ class ModelCache:
             try:
                 print(f"Training {model_type.upper()}...")
                 model, _, _ = train_model(X, y, model_type=model_type)
-                self.models[model_type] = model
+                
+                # Handle logreg which returns (model, scaler) tuple
+                if model_type == 'logreg' and isinstance(model, tuple):
+                    self.models['logreg'], self.models['logreg_scaler'] = model
+                else:
+                    self.models[model_type] = model
+                    
                 print(f"✓ {model_type.upper()} trained successfully")
             except Exception as e:
                 print(f"✗ {model_type.upper()} failed: {e}")
