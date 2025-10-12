@@ -1,4 +1,4 @@
-import { BarChart3, Target, TrendingUp, Trophy, Zap } from 'lucide-react';
+import { BarChart3, Target, TrendingUp, Zap } from 'lucide-react';
 import React from 'react';
 
 const TeamStats = ({ teamStats, teamName, isHome }) => {
@@ -49,32 +49,24 @@ const TeamStats = ({ teamStats, teamName, isHome }) => {
         <div className="bg-white/5 rounded-lg p-2 text-center">
           <div className="text-xs text-gray-400 mb-1">Last 5</div>
           <div className="text-sm font-bold text-white">
-            {teamStats.last_5.wins}-{teamStats.last_5.games - teamStats.last_5.wins}
+            {teamStats.last_5_wins}-{teamStats.last_5_games - teamStats.last_5_wins}
           </div>
         </div>
         <div className="bg-white/5 rounded-lg p-2 text-center">
           <div className="text-xs text-gray-400 mb-1">Last 10</div>
           <div className="text-sm font-bold text-white">
-            {teamStats.last_10.wins}-{teamStats.last_10.games - teamStats.last_10.wins}
+            {teamStats.last_10_wins}-{teamStats.last_10_games - teamStats.last_10_wins}
           </div>
         </div>
         <div className="bg-white/5 rounded-lg p-2 text-center">
           <div className="text-xs text-gray-400 mb-1">Season</div>
           <div className="text-sm font-bold text-white">
-            {teamStats.season.wins}-{teamStats.season.games - teamStats.season.wins}
+            {teamStats.season_wins}-{teamStats.season_games - teamStats.season_wins}
           </div>
         </div>
       </div>
 
-      {/* Playoff Record */}
-      {teamStats.playoffs.games > 0 && (
-        <div className="bg-yellow-500/20 border border-yellow-500/50 rounded-lg p-2 mb-4">
-          <div className="flex items-center space-x-2 text-yellow-200">
-            <Trophy className="h-4 w-4" />
-            <span className="text-sm font-medium">Playoffs: {teamStats.playoffs.wins}-{teamStats.playoffs.games - teamStats.playoffs.wins}</span>
-          </div>
-        </div>
-      )}
+      {/* Playoff Record - Not available in current API */}
 
       {/* Recent Stats */}
       <div className="grid grid-cols-2 gap-3">
@@ -84,7 +76,7 @@ const TeamStats = ({ teamStats, teamName, isHome }) => {
             <span className="text-xs text-gray-400">Points (5g)</span>
           </div>
           <div className="text-lg font-bold text-white">
-            {formatNumber(teamStats.last_5.PTS)}
+            {formatNumber(teamStats.last_5_pts)}
           </div>
         </div>
 
@@ -94,7 +86,7 @@ const TeamStats = ({ teamStats, teamName, isHome }) => {
             <span className="text-xs text-gray-400">FG% (5g)</span>
           </div>
           <div className="text-lg font-bold text-white">
-            {formatPercentage(teamStats.last_5.FG_PCT)}
+            {formatPercentage(teamStats.last_5_fg_pct)}
           </div>
         </div>
 
@@ -104,7 +96,7 @@ const TeamStats = ({ teamStats, teamName, isHome }) => {
             <span className="text-xs text-gray-400">3P% (5g)</span>
           </div>
           <div className="text-lg font-bold text-white">
-            {formatPercentage(teamStats.last_5.FG3_PCT)}
+            {formatPercentage(teamStats.last_5_fg3_pct)}
           </div>
         </div>
 
@@ -114,7 +106,7 @@ const TeamStats = ({ teamStats, teamName, isHome }) => {
             <span className="text-xs text-gray-400">Rebounds (5g)</span>
           </div>
           <div className="text-lg font-bold text-white">
-            {formatNumber(teamStats.last_5.REB)}
+            {formatNumber(teamStats.last_5_reb)}
           </div>
         </div>
 
@@ -124,7 +116,7 @@ const TeamStats = ({ teamStats, teamName, isHome }) => {
             <span className="text-xs text-gray-400">Assists (5g)</span>
           </div>
           <div className="text-lg font-bold text-white">
-            {formatNumber(teamStats.last_5.AST)}
+            {formatNumber(teamStats.last_5_ast)}
           </div>
         </div>
 
@@ -134,7 +126,7 @@ const TeamStats = ({ teamStats, teamName, isHome }) => {
             <span className="text-xs text-gray-400">Turnovers (5g)</span>
           </div>
           <div className="text-lg font-bold text-white">
-            {formatNumber(teamStats.last_5.TOV)}
+            {formatNumber(teamStats.last_5_tov)}
           </div>
         </div>
       </div>

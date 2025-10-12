@@ -21,8 +21,8 @@ const PredictionResult = ({ prediction, onReset }) => {
   };
 
   const winner = prediction.prediction === 1 
-    ? { abbreviation: prediction.homeTeamName.split(' ').pop(), full_name: prediction.homeTeamName }
-    : { abbreviation: prediction.awayTeamName.split(' ').pop(), full_name: prediction.awayTeamName };
+    ? { abbreviation: prediction.home_team_name.split(' ').pop(), full_name: prediction.home_team_name }
+    : { abbreviation: prediction.away_team_name.split(' ').pop(), full_name: prediction.away_team_name };
   const winnerProb = prediction.prediction === 1 
     ? prediction.home_win_probability 
     : prediction.away_win_probability;
@@ -73,7 +73,7 @@ const PredictionResult = ({ prediction, onReset }) => {
         <div className="flex items-center justify-between p-3 bg-white/5 rounded-lg">
           <div className="flex items-center space-x-3">
             <Home className="h-5 w-5 text-blue-400" />
-            <span className="text-white font-medium">{prediction.homeTeamName.split(' ').pop()}</span>
+            <span className="text-white font-medium">{prediction.home_team_name.split(' ').pop()}</span>
           </div>
           <div className="text-right">
             <div className="text-lg font-semibold text-white">
@@ -91,7 +91,7 @@ const PredictionResult = ({ prediction, onReset }) => {
         <div className="flex items-center justify-between p-3 bg-white/5 rounded-lg">
           <div className="flex items-center space-x-3">
             <Plane className="h-5 w-5 text-red-400" />
-            <span className="text-white font-medium">{prediction.awayTeamName.split(' ').pop()}</span>
+            <span className="text-white font-medium">{prediction.away_team_name.split(' ').pop()}</span>
           </div>
           <div className="text-right">
             <div className="text-lg font-semibold text-white">

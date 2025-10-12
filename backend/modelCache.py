@@ -11,13 +11,13 @@ from pathlib import Path
 # Add src directory to path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from train_model import train_model
+from trainModel import train_model
 
 # Lazy imports for deep learning frameworks
 def _lazy_import_pytorch():
     """Lazy import PyTorch modules - only when actually needed"""
     try:
-        from pytorch_model import train_pytorch_model, predict_pytorch
+        from pytorchModel import train_pytorch_model, predict_pytorch
         return True
     except ImportError:
         print("⚠️ PyTorch not available")
@@ -34,7 +34,7 @@ def _lazy_import_tensorflow():
 def _lazy_import_ensemble():
     """Lazy import Ensemble modules - only when actually needed"""
     try:
-        from ensemble_model import NBAEnsemblePredictor
+        from ensembleModel import NBAEnsemblePredictor
         return True
     except ImportError:
         print("⚠️ Ensemble not available")
@@ -82,7 +82,13 @@ class ModelCache:
             try:
                 print(f"Training {model_type.upper()}...")
                 model, _, _ = train_model(X, y, model_type=model_type)
-                self.models[model_type] = model
+                
+                # Handle logreg which returns (model, scaler) tuple
+                if model_type == 'logreg' and isinstance(model, tuple):
+                    self.models['logreg'], self.models['logreg_scaler'] = model
+                else:
+                    self.models[model_type] = model
+                    
                 print(f"✓ {model_type.upper()} trained successfully")
             except Exception as e:
                 print(f"✗ {model_type.upper()} failed: {e}")
@@ -93,7 +99,7 @@ class ModelCache:
         if _lazy_import_pytorch():
             try:
                 print("Training PyTorch hybrid model...")
-                from pytorch_model import train_pytorch_model
+                from pytorchModel import train_pytorch_model
                 model, test_data, scaler, train_losses = train_pytorch_model(
                     X, y, model_type='hybrid', epochs=pytorch_epochs
                 )
@@ -110,7 +116,7 @@ class ModelCache:
         print("-" * 40)
         if _lazy_import_tensorflow():
             try:
-                from tensorflow_model import train_tensorflow_model
+                from tensorflowModel import train_tensorflow_model
                 print("Training TensorFlow hybrid model...")
                 model, test_data, history = train_tensorflow_model(
                     X, y, model_type='hybrid', epochs=tensorflow_epochs
@@ -128,7 +134,7 @@ class ModelCache:
         if _lazy_import_ensemble():
             try:
                 print("Training ensemble model...")
-                from ensemble_model import NBAEnsemblePredictor
+                from ensembleModel import NBAEnsemblePredictor
                 ensemble = NBAEnsemblePredictor()
                 ensemble.fit(X, y)
                 self.models['ensemble'] = ensemble
@@ -247,7 +253,7 @@ class ModelCache:
         
         if model_type == 'pytorch':
             if _lazy_import_pytorch():
-                from pytorch_model import predict_pytorch
+                from pytorchModel import predict_pytorch
                 return predict_pytorch(model, X, scaler)
             else:
                 raise ValueError("PyTorch model not available")

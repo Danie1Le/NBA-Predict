@@ -31,7 +31,7 @@ const TeamSelector = ({ label, teams, selectedTeam, onTeamSelect, disabled }) =>
               value={team.id}
               className="bg-gray-800 text-white"
             >
-              {team.abbreviation} - {team.full_name}
+              {team.abbreviation} - {team.name}
             </option>
           ))}
         </select>
@@ -49,7 +49,7 @@ const TeamSelector = ({ label, teams, selectedTeam, onTeamSelect, disabled }) =>
             </div>
             <div>
               <p className="text-white font-medium">{selectedTeam.abbreviation}</p>
-              <p className="text-gray-300 text-sm">{selectedTeam.full_name}</p>
+              <p className="text-gray-300 text-sm">{selectedTeam.name}</p>
             </div>
           </div>
         </div>
