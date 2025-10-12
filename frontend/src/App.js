@@ -185,11 +185,7 @@ function App() {
         timeout: 30000 // 30 second timeout
       });
       
-      setPrediction({
-        ...response.data,
-        homeTeamName: selectedHomeTeam.full_name,
-        awayTeamName: selectedAwayTeam.full_name
-      });
+      setPrediction(response.data);
     } catch (err) {
       if (err.code === 'ECONNABORTED') {
         setError('Prediction is taking longer than expected. The AI is working hard! Please try again.');
