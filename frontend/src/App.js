@@ -135,7 +135,7 @@ function App() {
       } else if (err.response?.status >= 500) {
         setError('Backend server error. The service might be starting up. Please wait a moment and try again.');
       } else {
-        setError('Failed to load initial data. Please check your connection and try again.');
+        setError('Backend will start up in a few minutes, please wait a moment.');
       }
     } finally {
       setLoading(false);
@@ -420,7 +420,6 @@ function App() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="text-center text-gray-300">
             <p>Powered by Machine Learning • XGBoost • Random Forest • Logistic Regression</p>
-            <p className="text-sm mt-2">78.6% Accuracy • 0.837 AUC</p>
           </div>
         </div>
       </footer>
