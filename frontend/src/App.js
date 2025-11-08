@@ -107,21 +107,29 @@ function App() {
       try {
         const modelsResponse = await axios.get(`${API_BASE_URL}/models`, axiosConfig);
         const backendModels = modelsResponse.data.available_models || [];
-        setAvailableModels(backendModels);
+        
+        // Always ensure default models are available (especially if backend returns empty array)
+        const defaultModels = ['xgb', 'rf', 'logreg'];
+        const modelsWithDefaults = backendModels.length > 0 
+          ? [...new Set([...backendModels, ...defaultModels])] 
+          : defaultModels;
+        
+        setAvailableModels(modelsWithDefaults);
         
         // If deep learning models are not available yet, check again in 30 seconds
         const hasDeepLearning = backendModels.some(model => 
           ['pytorch', 'tensorflow', 'ensemble'].includes(model)
         );
         
-        if (!hasDeepLearning && backendModels.length > 0) {
+        // Check again if no deep learning models (whether backend returned empty or just traditional models)
+        if (!hasDeepLearning) {
           setTimeout(() => {
             loadModels(); // Check for updated models
           }, 30000);
         }
       } catch (modelsErr) {
         // Fallback to basic models if models endpoint fails
-        setAvailableModels(['xgb']);
+        setAvailableModels(['xgb', 'rf', 'logreg']);
       }
       
     } catch (err) {
@@ -135,7 +143,7 @@ function App() {
       } else if (err.response?.status >= 500) {
         setError('Backend server error. The service might be starting up. Please wait a moment and try again.');
       } else {
-        setError('Failed to load initial data. Please check your connection and try again.');
+        setError('Backend will start up in a few minutes, please wait a moment.');
       }
     } finally {
       setLoading(false);
@@ -420,7 +428,6 @@ function App() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="text-center text-gray-300">
             <p>Powered by Machine Learning • XGBoost • Random Forest • Logistic Regression</p>
-            <p className="text-sm mt-2">78.6% Accuracy • 0.837 AUC</p>
           </div>
         </div>
       </footer>
