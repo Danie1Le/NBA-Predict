@@ -107,21 +107,29 @@ function App() {
       try {
         const modelsResponse = await axios.get(`${API_BASE_URL}/models`, axiosConfig);
         const backendModels = modelsResponse.data.available_models || [];
-        setAvailableModels(backendModels);
+        
+        // Always ensure default models are available (especially if backend returns empty array)
+        const defaultModels = ['xgb', 'rf', 'logreg'];
+        const modelsWithDefaults = backendModels.length > 0 
+          ? [...new Set([...backendModels, ...defaultModels])] 
+          : defaultModels;
+        
+        setAvailableModels(modelsWithDefaults);
         
         // If deep learning models are not available yet, check again in 30 seconds
         const hasDeepLearning = backendModels.some(model => 
           ['pytorch', 'tensorflow', 'ensemble'].includes(model)
         );
         
-        if (!hasDeepLearning && backendModels.length > 0) {
+        // Check again if no deep learning models (whether backend returned empty or just traditional models)
+        if (!hasDeepLearning) {
           setTimeout(() => {
             loadModels(); // Check for updated models
           }, 30000);
         }
       } catch (modelsErr) {
         // Fallback to basic models if models endpoint fails
-        setAvailableModels(['xgb']);
+        setAvailableModels(['xgb', 'rf', 'logreg']);
       }
       
     } catch (err) {
