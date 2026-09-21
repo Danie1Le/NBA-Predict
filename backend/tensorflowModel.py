@@ -3,7 +3,6 @@ from tensorflow import keras
 from tensorflow.keras import layers
 import numpy as np
 from sklearn.preprocessing import StandardScaler
-from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, roc_auc_score
 import pandas as pd
 
@@ -185,9 +184,9 @@ class NBAPredictorTF:
         Train the model with the given data.
         """
         # Prepare data
-        X_train, X_test, y_train, y_test = train_test_split(
-            X, y, test_size=0.2, random_state=42, stratify=y
-        )
+        # Date-ordered split: rows are sorted by game date, so the tail is the future
+        cut = int(len(X) * 0.8)
+        X_train, X_test, y_train, y_test = X[:cut], X[cut:], y[:cut], y[cut:]
         
         # Scale features
         X_train_scaled = self.scaler.fit_transform(X_train)

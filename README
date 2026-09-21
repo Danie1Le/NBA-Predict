@@ -14,10 +14,12 @@ The goal is **not** to predict future seasons (since rosters change), but to mod
 
 ## 🧠 Key Features
 
-- **End-to-end ML pipeline**: Data cleaning, feature engineering, model training, evaluation, and visualization.
-- **Time-aware validation**: Ensures predictions use only stats prior to the game date.
-- **Model explainability**: Feature importance analysis to show which stats matter most for predicting wins.
-- **Interactive demo**: Streamlit web app to predict outcomes between two teams and visualize key indicators.
+- **End-to-end ML pipeline**: Data cleaning, feature engineering, model training and evaluation.
+- **Time-aware validation**: Every feature uses only games played before the one being predicted, and every
+  train/test split is ordered by date. Enforced by tests, not by convention.
+- **Honest reporting**: Accuracy is quoted against the always-pick-home baseline, with calibration and a
+  stated ceiling.
+- **Interactive demo**: React front end over a FastAPI backend to predict outcomes between two teams.
 
 ---
 
@@ -36,34 +38,33 @@ The goal is **not** to predict future seasons (since rosters change), but to mod
 - **Python 3.11**
 - **Pandas**, **NumPy** for data manipulation
 - **Scikit-learn**, **XGBoost** for modeling
-- **Matplotlib**, **Plotly** for visualization
-- **Streamlit** for interactive web interface
+- **React** + **FastAPI** for the web interface
 
 ---
 
 ## 📁 Project Structure
 ```
-NBA Predict/
-│
-├── Data/
-│ ├── NBA_GAMES.csv
-│ └── NBA_TEAMS.csv
+NBA-Predict/
 │
 ├── backend/
-│ ├── preprocessing.py
-│ ├── feature_engineering.py
-│ ├── train_model.py
-│ ├── model_cache.py
-│ ├── ensemble_model.py
-│ ├── pytorch_model.py
-│ ├── tensorflow_model.py
-│ └── main.py
+│ ├── Data/
+│ │ ├── NBA_GAMES.csv
+│ │ └── NBA_TEAMS.csv
+│ ├── preprocessing.py        # raw box scores -> one pre-game row per matchup
+│ ├── featureEngineering.py   # difference features + the shipped feature list
+│ ├── trainModel.py           # model definitions and the date-ordered split
+│ ├── modelCache.py           # trains and caches models for fast switching
+│ ├── dataLoader.py           # loads data, models and current team state
+│ ├── predictionService.py    # builds a prediction from two teams' current form
+│ ├── routes.py / main.py     # FastAPI app
+│ ├── evaluate.py             # walk-forward validation, reproduces the numbers
+│ └── test_leakage.py         # guards against the model seeing the future
 │
-├── app/
-│ └── streamlit_app.py
+├── frontend/                 # React app
+│ └── src/components/
 │
 ├── README
-├── requirements.txt
+├── docker-compose.yml
 └── .gitignore
 ```
 
@@ -94,14 +95,35 @@ NBA Predict/
 
 ## 📈 Model Performance
 
-The project includes multiple model types:
-- **Random Forest**: Good for feature importance analysis
-- **XGBoost**: High performance gradient boosting
-- **Logistic Regression**: Interpretable baseline model
+Measured by walk-forward validation: the season is replayed in six blocks, and
+every prediction comes from a model trained only on games played earlier. A
+single random train/test split would let the model learn from games that happen
+after the ones it is scored on, so the numbers it produces are not meaningful.
 
-Feature engineering includes:
-- Rolling averages (5 and 10 game windows)
-- Home/away indicators
-- Rest days between games
-- Win streaks and momentum
-- Opponent performance metrics
+Reproduce with `cd backend && python evaluate.py`:
+
+| | accuracy | AUC | log loss |
+|---|---|---|---|
+| Always pick the home team | 54.1% | – | – |
+| Elo rating alone | 66.1% | 0.717 | 0.615 |
+| **Shipped model** (logistic regression, 12 features) | **66.6%** | **0.721** | **0.613** |
+
+Accuracy by the confidence label the app shows: 74% on high-confidence calls
+(55% of games), 61% on medium, 53% on low. Predicted probabilities are
+calibrated — games it calls at 65% are won about 65% of the time.
+
+For context, that is close to the ceiling for this kind of model. If the
+predicted probabilities were exactly right, the best achievable accuracy would
+be 68.2%. Betting markets, which price in injuries and lineups, land near 70%.
+Any version of this project reporting much more than that is leaking.
+
+**Models**: Logistic Regression (shipped), Random Forest, XGBoost. The linear
+model wins here — with ~1,000 training games the tree ensembles overfit.
+
+**Features** — all strictly pre-game, one row per matchup:
+- Two Elo ratings: a fast one that reacts to margin of victory, a slow one that
+  tracks season-long strength
+- Rolling form over 5 and 10 games: point margin, net rating, shooting
+  efficiency (own and allowed), turnover rate, offensive rebound share
+- Season-to-date record, split by home and away
+- Rest days and back-to-back flags

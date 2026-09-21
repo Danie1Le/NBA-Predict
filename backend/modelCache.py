@@ -81,14 +81,9 @@ class ModelCache:
         for model_type in traditional_models:
             try:
                 print(f"Training {model_type.upper()}...")
+                # Scaling lives inside the pipeline, so the model is self-contained.
                 model, _, _ = train_model(X, y, model_type=model_type)
-                
-                # Handle logreg which returns (model, scaler) tuple
-                if model_type == 'logreg' and isinstance(model, tuple):
-                    self.models['logreg'], self.models['logreg_scaler'] = model
-                else:
-                    self.models[model_type] = model
-                    
+                self.models[model_type] = model
                 print(f"✓ {model_type.upper()} trained successfully")
             except Exception as e:
                 print(f"✗ {model_type.upper()} failed: {e}")
@@ -167,10 +162,7 @@ class ModelCache:
         
         if model_type == 'pytorch':
             return self.models['pytorch'], self.models.get('pytorch_scaler')
-        elif model_type == 'logreg':  # Logistic regression has its own scaler
-            return self.models['logreg'], self.models.get('logreg_scaler')
-        else:
-            return self.models[model_type], None
+        return self.models[model_type], None
     
     def save_models(self, filename="cached_models.pkl"):
         """
@@ -268,37 +260,7 @@ class ModelCache:
                 return model.predict_ensemble(X)
             else:
                 raise ValueError("Ensemble model not available")
-        elif model_type == 'logreg':  # Logistic Regression needs scaling
-            if scaler is not None:
-                # Clip extreme values before scaling to prevent extreme predictions
-                X_clipped = np.clip(X, -1000, 1000)
-                X_scaled = scaler.transform(X_clipped)
-                y_pred = model.predict(X_scaled)
-                y_proba = model.predict_proba(X_scaled)
-                
-                # Apply probability calibration to prevent extreme predictions
-                if len(y_proba) > 0:
-                    # Soften extreme probabilities
-                    away_prob = y_proba[0][0]
-                    home_prob = y_proba[0][1]
-                    
-                    # If prediction is too extreme, apply smoothing
-                    if away_prob > 0.9 or home_prob > 0.9:
-                        # Apply sigmoid smoothing to reduce extreme predictions
-                        decision_score = model.decision_function(X_scaled)[0]
-                        smoothed_score = np.tanh(decision_score * 0.5)  # Reduce extreme scores
-                        smoothed_away = 1 / (1 + np.exp(-smoothed_score))
-                        smoothed_home = 1 - smoothed_away
-                        
-                        y_proba = np.array([[smoothed_away, smoothed_home]])
-                        y_pred = [1 if smoothed_home > 0.5 else 0]
-                        
-                
-            else:
-                y_pred = model.predict(X)
-                y_proba = model.predict_proba(X)
-            return y_pred, y_proba
-        else:  # Other traditional ML (XGBoost, Random Forest)
+        else:  # Traditional ML pipelines (logreg, Random Forest, XGBoost)
             y_pred = model.predict(X)
             y_proba = model.predict_proba(X)
             return y_pred, y_proba

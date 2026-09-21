@@ -49,17 +49,19 @@ const HowItWorks = () => {
                      bg-surface/90 p-5 text-sm text-label-2 shadow-xl ring-1 ring-separator backdrop-blur-xl backdrop-saturate-150"
         >
           <p>
-            Each model learned from games of the 2024–25 NBA season, playoffs included. For a matchup, it compares
-            the two teams' averages over their last five games (points, shooting, rebounds, assists and turnovers),
-            their win rates, and home-court advantage, then estimates each team's chance to win.
+            Each model learned from the 1,281 games of the 2024–25 NBA season, playoffs included. For a matchup, it
+            compares the two teams' Elo ratings, their form over their last five and ten games (points won by,
+            shooting efficiency, turnovers, rebounding), their season records, and home-court advantage, then
+            estimates each team's chance to win.
           </p>
           <p>
-            It doesn't know about injuries, trades or rest days, so read the result as a take on recent form rather
-            than a forecast for a specific night.
+            It doesn't know about injuries, trades or who's resting, so read the result as a take on team strength
+            and recent form rather than a forecast for a specific night.
           </p>
           <p>
-            In the project's testing on held-out games, the models picked the winner 78.6% of the time (AUC 0.837),
-            and 89.8% of the time when their confidence was high.
+            Tested by walk-forward validation, where every prediction comes from a model trained only on earlier
+            games, it picked the winner 66.6% of the time (AUC 0.72). Always backing the home team gets 54%. When
+            it calls a game with high confidence, which is about half of them, it is right 74% of the time.
           </p>
           <p className="border-t border-separator pt-3">
             Not affiliated with the NBA.{' '}
