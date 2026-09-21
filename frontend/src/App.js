@@ -1,436 +1,300 @@
-import axios from 'axios';
-import { BarChart3, Circle, Target, TrendingUp, Users, Zap } from 'lucide-react';
-import React, { useCallback, useEffect, useState } from 'react';
+import { ArrowLeftRight } from 'lucide-react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { checkHealth, describeError, getModels, getTeams, getTeamStats, predictGame } from './api';
+import HowItWorks from './components/HowItWorks';
 import LoadingSpinner from './components/LoadingSpinner';
 import ModelSelector from './components/ModelSelector';
 import PredictionResult from './components/PredictionResult';
+import ServerStatus from './components/ServerStatus';
 import TeamSelector from './components/TeamSelector';
 import TeamStats from './components/TeamStats';
+import { matchupColors, TEAMS, withTeamMeta } from './teams';
 
-// Auto-detect environment and set API URL
-const getApiUrl = () => {
-  // If running locally (development)
-  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-    return 'http://localhost:8000';
+// The backend trains these on the first prediction, so they're always offered.
+const DEFAULT_MODELS = ['xgb', 'rf', 'logreg'];
+const MODEL_ORDER = ['ensemble', 'xgb', 'rf', 'logreg', 'pytorch', 'tensorflow'];
+
+// Open on the 2025 Finals so there's something to predict right away.
+const DEFAULT_AWAY = 'IND';
+const DEFAULT_HOME = 'OKC';
+
+const HEALTH_ATTEMPTS = 6;
+const RETRY_DELAY_MS = 3000;
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const findByAbbreviation = (abbreviation) =>
+  TEAMS.find((team) => team.abbreviation === abbreviation?.toUpperCase());
+
+// Matchup and model live in the URL so a prediction can be shared or bookmarked.
+const readInitialState = () => {
+  const params = new URLSearchParams(window.location.search);
+  let away = findByAbbreviation(params.get('away')) ?? findByAbbreviation(DEFAULT_AWAY);
+  let home = findByAbbreviation(params.get('home')) ?? findByAbbreviation(DEFAULT_HOME);
+  if (away.id === home.id) {
+    away = findByAbbreviation(DEFAULT_AWAY);
+    home = findByAbbreviation(DEFAULT_HOME);
   }
-  // Production URL
-  return process.env.REACT_APP_API_URL || 'https://nba-predict-7hz6.onrender.com';
+  return { awayId: away.id, homeId: home.id, model: params.get('model') };
 };
 
-const API_BASE_URL = getApiUrl();
-
-// Debug logging
-
 function App() {
-  const [teams, setTeams] = useState([]);
-  const [selectedHomeTeam, setSelectedHomeTeam] = useState(null);
-  const [selectedAwayTeam, setSelectedAwayTeam] = useState(null);
-  const [selectedModel, setSelectedModel] = useState('xgb');
-  const [availableModels, setAvailableModels] = useState(['xgb', 'rf', 'logreg']); // Always include logistic regression
-  const [prediction, setPrediction] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-  const [homeTeamStats, setHomeTeamStats] = useState(null);
-  const [awayTeamStats, setAwayTeamStats] = useState(null);
+  const [initial] = useState(readInitialState);
+  const [server, setServer] = useState('connecting'); // connecting | waking | ready | offline
+  const [connectAttempt, setConnectAttempt] = useState(0);
+  const [teams, setTeams] = useState(TEAMS);
+  const [models, setModels] = useState(DEFAULT_MODELS);
+  const [recommendedModel, setRecommendedModel] = useState('xgb');
 
+  const [awayId, setAwayId] = useState(initial.awayId);
+  const [homeId, setHomeId] = useState(initial.homeId);
+  const [chosenModel, setChosenModel] = useState(initial.model);
+
+  // Results are cached per away/home/model, so switching back is instant
+  // and a result never shows next to inputs it wasn't made for.
+  const [results, setResults] = useState({});
+  const [pendingKey, setPendingKey] = useState(null);
+  const [predictError, setPredictError] = useState(null);
+
+  const [teamStats, setTeamStats] = useState({});
+  const requestedStats = useRef(new Set());
+  const lastResult = useRef(null);
+
+  const findTeam = (id) => teams.find((team) => team.id === id) ?? TEAMS.find((team) => team.id === id);
+  const awayTeam = findTeam(awayId);
+  const homeTeam = findTeam(homeId);
+  const colors = useMemo(() => matchupColors(awayTeam, homeTeam), [awayTeam, homeTeam]);
+
+  const model = models.includes(chosenModel) ? chosenModel : recommendedModel;
+  const matchupKey = `${awayId}:${homeId}`;
+  const resultKey = `${matchupKey}:${model}`;
+  const result = results[resultKey];
+  const pending = pendingKey === resultKey;
+  const serverReady = server === 'ready';
+
+  // While another model runs for the same matchup, keep the last result on
+  // screen (dimmed) instead of snapping the court back to even.
+  const heldResult =
+    !result && pending && lastResult.current?.matchupKey === matchupKey ? lastResult.current.result : null;
 
   useEffect(() => {
-    if (selectedHomeTeam) {
-      loadTeamStats(selectedHomeTeam.id, 'home');
-    }
-  }, [selectedHomeTeam]);
+    if (result) lastResult.current = { matchupKey, result };
+  }, [matchupKey, result]);
+
+  // Connect: wait for /health (Render cold starts), then load teams and models.
+  useEffect(() => {
+    let cancelled = false;
+    setServer('connecting');
+    const wakingTimer = setTimeout(() => {
+      if (!cancelled) setServer((state) => (state === 'connecting' ? 'waking' : state));
+    }, RETRY_DELAY_MS);
+
+    const connect = async () => {
+      for (let attempt = 0; attempt < HEALTH_ATTEMPTS; attempt += 1) {
+        try {
+          if (await checkHealth()) {
+            const [teamList, modelInfo] = await Promise.all([
+              getTeams().catch(() => null),
+              getModels().catch(() => null),
+            ]);
+            if (cancelled) return;
+            if (teamList?.length) setTeams(withTeamMeta(teamList));
+            if (modelInfo) {
+              const available = new Set([...DEFAULT_MODELS, ...(modelInfo.available_models ?? [])]);
+              setModels(MODEL_ORDER.filter((name) => available.has(name)));
+              if (available.has(modelInfo.recommended_model)) setRecommendedModel(modelInfo.recommended_model);
+            }
+            setServer('ready');
+            return;
+          }
+        } catch {
+          // Still starting up; try again below.
+        }
+        if (cancelled) return;
+        await sleep(RETRY_DELAY_MS);
+        if (cancelled) return;
+      }
+      setServer('offline');
+    };
+    connect();
+
+    return () => {
+      cancelled = true;
+      clearTimeout(wakingTimer);
+    };
+  }, [connectAttempt]);
+
+  const loadStats = useCallback((teamId) => {
+    requestedStats.current.add(teamId);
+    setTeamStats((all) => ({ ...all, [teamId]: { status: 'loading' } }));
+    getTeamStats(teamId)
+      .then((data) => setTeamStats((all) => ({ ...all, [teamId]: { status: 'ready', data } })))
+      .catch(() => {
+        requestedStats.current.delete(teamId);
+        setTeamStats((all) => ({ ...all, [teamId]: { status: 'error' } }));
+      });
+  }, []);
 
   useEffect(() => {
-    if (selectedAwayTeam) {
-      loadTeamStats(selectedAwayTeam.id, 'away');
-    }
-  }, [selectedAwayTeam]);
+    if (!serverReady) return;
+    [awayId, homeId].forEach((teamId) => {
+      if (!requestedStats.current.has(teamId)) loadStats(teamId);
+    });
+  }, [serverReady, awayId, homeId, loadStats]);
 
-  const checkBackendHealth = useCallback(async () => {
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    params.set('away', awayTeam.abbreviation);
+    params.set('home', homeTeam.abbreviation);
+    if (chosenModel) params.set('model', chosenModel);
+    else params.delete('model');
+    window.history.replaceState(null, '', `${window.location.pathname}?${params}`);
+  }, [awayTeam.abbreviation, homeTeam.abbreviation, chosenModel]);
+
+  const predict = useCallback(async (modelType) => {
+    const key = `${awayId}:${homeId}:${modelType}`;
+    setPendingKey(key);
+    setPredictError(null);
     try {
-      const response = await axios.get(`${API_BASE_URL}/health`, {
-        timeout: 5000 // 5 second timeout for health check
-      });
-      return response.data.status === 'healthy';
+      const data = await predictGame({ homeTeamId: homeId, awayTeamId: awayId, model: modelType });
+      setResults((all) => ({ ...all, [key]: data }));
     } catch (err) {
-      console.warn('Backend health check failed:', err.message);
-      return false;
-    }
-  }, []);
-
-  const loadModels = useCallback(async () => {
-    try {
-      const modelsResponse = await axios.get(`${API_BASE_URL}/models`, {
-        timeout: 10000 // 10 second timeout
-      });
-      const backendModels = modelsResponse.data.available_models || [];
-      
-      // Always ensure logistic regression is available
-      const modelsWithLogReg = [...new Set([...backendModels, 'logreg'])];
-      
-      setAvailableModels(prevModels => {
-        // If we now have more models, show a notification
-        if (modelsWithLogReg.length > prevModels.length) {
-          // Could show notification here if needed
-        }
-        return modelsWithLogReg;
-      });
-    } catch (err) {
-      console.error('Error loading models:', err);
-      // Fallback to default models including logistic regression
-      setAvailableModels(['xgb', 'rf', 'logreg']);
-    }
-  }, []);
-
-  const loadInitialData = useCallback(async () => {
-    try {
-      setLoading(true);
-      
-      // Check backend health first
-      const isHealthy = await checkBackendHealth();
-      if (!isHealthy) {
-        throw new Error('Backend is not responding to health checks');
-      }
-      // Reduced timeout for faster failure detection
-      const axiosConfig = {
-        timeout: 8000, // 8 second timeout
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      };
-      
-      // Load teams first (fast), then models (may be slower)
-      const teamsResponse = await axios.get(`${API_BASE_URL}/teams`, axiosConfig);
-      setTeams(teamsResponse.data);
-      
-      // Load models with separate timeout handling
-      try {
-        const modelsResponse = await axios.get(`${API_BASE_URL}/models`, axiosConfig);
-        const backendModels = modelsResponse.data.available_models || [];
-        
-        // Always ensure default models are available (especially if backend returns empty array)
-        const defaultModels = ['xgb', 'rf', 'logreg'];
-        const modelsWithDefaults = backendModels.length > 0 
-          ? [...new Set([...backendModels, ...defaultModels])] 
-          : defaultModels;
-        
-        setAvailableModels(modelsWithDefaults);
-        
-        // If deep learning models are not available yet, check again in 30 seconds
-        const hasDeepLearning = backendModels.some(model => 
-          ['pytorch', 'tensorflow', 'ensemble'].includes(model)
-        );
-        
-        // Check again if no deep learning models (whether backend returned empty or just traditional models)
-        if (!hasDeepLearning) {
-          setTimeout(() => {
-            loadModels(); // Check for updated models
-          }, 30000);
-        }
-      } catch (modelsErr) {
-        // Fallback to basic models if models endpoint fails
-        setAvailableModels(['xgb', 'rf', 'logreg']);
-      }
-      
-    } catch (err) {
-      console.error('Error loading initial data:', err);
-      
-      // Show more specific error messages
-      if (err.code === 'ECONNABORTED') {
-        setError('Backend is taking longer than expected to respond. The service might be starting up. Please wait a moment and try again.');
-      } else if (err.response?.status === 404) {
-        setError('Backend endpoint not found. Please check if the backend is deployed correctly.');
-      } else if (err.response?.status >= 500) {
-        setError('Backend server error. The service might be starting up. Please wait a moment and try again.');
-      } else {
-        setError('Backend will start up in a few minutes, please wait a moment.');
-      }
-    } finally {
-      setLoading(false);
-    }
-  }, [loadModels, checkBackendHealth]);
-
-  const loadTeamStats = async (teamId, type) => {
-    try {
-      const response = await axios.get(`${API_BASE_URL}/team-stats/${teamId}`);
-      if (type === 'home') {
-        setHomeTeamStats(response.data);
-      } else {
-        setAwayTeamStats(response.data);
-      }
-    } catch (err) {
-      console.error(`Error loading ${type} team stats:`, err);
-      // Set empty stats to show error state
-      if (type === 'home') {
-        setHomeTeamStats(null);
-      } else {
-        setAwayTeamStats(null);
-      }
-    }
-  };
-
-  const handlePredict = async () => {
-    if (!selectedHomeTeam || !selectedAwayTeam) {
-      setError('Please select both home and away teams');
-      return;
-    }
-
-    if (selectedHomeTeam.id === selectedAwayTeam.id) {
-      setError('Home and away teams must be different');
-      return;
-    }
-
-    try {
-      setLoading(true);
-      setError(null);
-      
-      // Add timeout for better UX
-      const response = await axios.post(`${API_BASE_URL}/predict`, {
-        home_team_id: selectedHomeTeam.id,
-        away_team_id: selectedAwayTeam.id,
-        model_type: selectedModel
-      }, {
-        timeout: 30000 // 30 second timeout
-      });
-      
-      setPrediction(response.data);
-    } catch (err) {
-      if (err.code === 'ECONNABORTED') {
-        setError('Prediction is taking longer than expected. The AI is working hard! Please try again.');
-      } else {
-        setError('Prediction failed. Please try again.');
-      }
       console.error('Prediction error:', err);
+      setPredictError({ key, message: describeError(err) });
     } finally {
-      setLoading(false);
+      setPendingKey((current) => (current === key ? null : current));
+    }
+  }, [awayId, homeId]);
+
+  // Once a matchup has been predicted, switching models answers right away.
+  const handleModelSelect = (nextModel) => {
+    setChosenModel(nextModel);
+    const nextKey = `${matchupKey}:${nextModel}`;
+    const matchupPredicted = Object.keys(results).some((key) => key.startsWith(`${matchupKey}:`));
+    if (serverReady && matchupPredicted && !results[nextKey] && pendingKey !== nextKey) {
+      predict(nextModel);
     }
   };
 
-  const resetPrediction = () => {
-    setPrediction(null);
-    setError(null);
+  const swapTeams = () => {
+    setAwayId(homeId);
+    setHomeId(awayId);
   };
 
-  // Load initial data after functions are defined
-  useEffect(() => {
-    loadInitialData();
-    
-    // Retry loading data with exponential backoff if it failed
-    let retryCount = 0;
-    const maxRetries = 5;
-    
-    const retryInterval = setInterval(() => {
-      if (teams.length === 0) {
-        retryCount++;
-        if (retryCount <= maxRetries) {
-          loadInitialData();
-        } else {
-          clearInterval(retryInterval);
-        }
-      } else {
-        // Success - clear the interval
-        clearInterval(retryInterval);
-      }
-    }, Math.min(10000 * Math.pow(2, retryCount), 60000)); // Exponential backoff, max 60s
-    
-    return () => clearInterval(retryInterval);
-  }, [teams.length, loadInitialData]);
+  let predictLabel = 'Predict winner';
+  if (pending) predictLabel = 'Predicting…';
+  else if (server === 'waking') predictLabel = 'Waiting for the server…';
+  else if (server === 'offline') predictLabel = 'Server unavailable';
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-900 via-purple-900 to-indigo-900 flex flex-col">
-      {/* Header */}
-      <header className="glass-effect border-b border-white/20">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="flex items-center justify-center space-x-4">
-            <Circle className="h-12 w-12 text-nba-orange animate-float" />
-            <div className="text-center">
-              <h1 className="text-4xl font-bold text-white gradient-text">
-                NBA Game Predictor
-              </h1>
-              <p className="text-lg text-gray-300 mt-2">
-                AI-Powered Basketball Game Predictions
-              </p>
-            </div>
+    // On tablets and up everything fits one screen: the layout is capped to the
+    // viewport height and the court and stats table flex to fill it. Phones
+    // stack the two panels and scroll.
+    <div className="flex min-h-dvh flex-col justify-center">
+      <div className="mx-auto flex w-full max-w-7xl flex-col gap-3 px-4 py-3 sm:px-6 md:h-dvh md:max-h-[60rem] md:min-h-[38rem]">
+        <header className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 md:flex-nowrap">
+          <div className="min-w-0 md:flex md:flex-1 md:items-baseline md:gap-3">
+            <h1 className="text-2xl font-bold leading-tight tracking-tight md:shrink-0 md:whitespace-nowrap">
+              NBA Game Predictor
+            </h1>
+            <p className="text-sm text-label-2 md:min-w-0 md:truncate">
+              Each team's chance to win any 2024–25 matchup, from machine learning models.
+            </p>
           </div>
-        </div>
-      </header>
-
-      {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-1">
-        {loading && !prediction && (
-          <div className="flex justify-center items-center py-12">
-            <LoadingSpinner 
-              message="Loading NBA Predictor..." 
-              subMessage="Traditional models ready, deep learning models training in background"
-            />
+          <div className="flex shrink-0 items-center gap-2">
+            <ServerStatus state={server} onRetry={() => setConnectAttempt((n) => n + 1)} />
+            <HowItWorks />
           </div>
-        )}
+        </header>
 
-        {error && (
-          <div className="bg-red-500/20 border border-red-500/50 rounded-lg p-4 mb-6">
-            <p className="text-red-200">{error}</p>
-            <button
-              onClick={() => {
-                setError(null);
-                loadInitialData();
-              }}
-              className="mt-2 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm transition-colors"
-            >
-              Retry Connection
-            </button>
-          </div>
-        )}
+        <main className="grid min-h-0 flex-1 grid-cols-1 gap-4 md:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)] md:grid-rows-[minmax(0,1fr)]">
+          <section
+            aria-labelledby="matchup-heading"
+            className="flex min-h-0 flex-col gap-4 rounded-2xl bg-surface p-4 shadow-sm ring-1 ring-separator sm:p-5"
+          >
+            <h2 id="matchup-heading" className="sr-only">Matchup</h2>
 
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-          {/* Left Column - Model Selection (Smaller) */}
-          <div className="lg:col-span-1">
-            <div className="glass-effect rounded-xl p-4">
-              <h2 className="text-lg font-semibold text-white mb-4 flex items-center">
-                <Target className="h-5 w-5 mr-2 text-nba-orange" />
-                Model
-              </h2>
-              
-              <ModelSelector
-                models={availableModels}
-                selectedModel={selectedModel}
-                onModelSelect={setSelectedModel}
-                disabled={loading}
+            <div className="grid grid-cols-1 items-end gap-2 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] md:grid-cols-1 lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]">
+              <TeamSelector
+                id="away-team"
+                label="Away"
+                teams={teams}
+                selectedTeam={awayTeam}
+                otherTeam={homeTeam}
+                otherLabel="Home"
+                color={colors.away}
+                onTeamSelect={setAwayId}
               />
-            </div>
-          </div>
-
-          {/* Middle Column - Team Selection */}
-          <div className="lg:col-span-2 space-y-6">
-            {/* Team Selection */}
-            <div className="glass-effect rounded-xl p-6">
-              <h2 className="text-2xl font-semibold text-white mb-6 flex items-center">
-                <Users className="h-6 w-6 mr-3 text-nba-orange" />
-                Team Selection
-              </h2>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <TeamSelector
-                  label="Home Team"
-                  teams={teams}
-                  selectedTeam={selectedHomeTeam}
-                  onTeamSelect={setSelectedHomeTeam}
-                  disabled={loading}
-                />
-                
-                <TeamSelector
-                  label="Away Team"
-                  teams={teams}
-                  selectedTeam={selectedAwayTeam}
-                  onTeamSelect={setSelectedAwayTeam}
-                  disabled={loading}
-                />
-              </div>
-
-              {/* Team Statistics - Right under team selection */}
-              <div className="mt-6">
-                <h3 className="text-lg font-semibold text-white mb-4 flex items-center">
-                  <BarChart3 className="h-5 w-5 mr-2 text-nba-orange" />
-                  Team Statistics
-                </h3>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {homeTeamStats && selectedHomeTeam ? (
-                    <TeamStats
-                      teamStats={homeTeamStats}
-                      teamName={selectedHomeTeam.name}
-                      isHome={true}
-                    />
-                  ) : selectedHomeTeam ? (
-                    <div className="p-4 rounded-lg border-2 border-blue-500/50 bg-blue-500/10">
-                      <div className="text-center text-gray-400">
-                        <BarChart3 className="h-8 w-8 mx-auto mb-2" />
-                        <p>Loading {selectedHomeTeam.name} stats...</p>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="p-4 rounded-lg border-2 border-gray-500/50 bg-gray-500/10">
-                      <div className="text-center text-gray-400">
-                        <BarChart3 className="h-8 w-8 mx-auto mb-2" />
-                        <p>Select Home Team</p>
-                      </div>
-                    </div>
-                  )}
-                  
-                  {awayTeamStats && selectedAwayTeam ? (
-                    <TeamStats
-                      teamStats={awayTeamStats}
-                      teamName={selectedAwayTeam.name}
-                      isHome={false}
-                    />
-                  ) : selectedAwayTeam ? (
-                    <div className="p-4 rounded-lg border-2 border-red-500/50 bg-red-500/10">
-                      <div className="text-center text-gray-400">
-                        <BarChart3 className="h-8 w-8 mx-auto mb-2" />
-                        <p>Loading {selectedAwayTeam.name} stats...</p>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="p-4 rounded-lg border-2 border-gray-500/50 bg-gray-500/10">
-                      <div className="text-center text-gray-400">
-                        <BarChart3 className="h-8 w-8 mx-auto mb-2" />
-                        <p>Select Away Team</p>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-
-          </div>
-
-          {/* Right Column - Prediction Results */}
-          <div className="lg:col-span-1 space-y-6">
-            {prediction && (
-              <PredictionResult
-                prediction={prediction}
-                onReset={resetPrediction}
-              />
-            )}
-            
-            {!prediction && (
-              <div className="glass-effect rounded-xl p-6 text-center">
-                <TrendingUp className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-                <h3 className="text-xl font-semibold text-white mb-2">
-                  Ready to Predict
-                </h3>
-                <p className="text-gray-300">
-                  Select teams and click predict to see the AI's prediction
-                </p>
-              </div>
-            )}
-            
-            {/* Predict Button */}
-            <div className="flex justify-center">
               <button
-                onClick={handlePredict}
-                disabled={loading || !selectedHomeTeam || !selectedAwayTeam}
-                className="bg-gradient-to-r from-nba-orange to-nba-red hover:from-orange-600 hover:to-red-600 
-                         disabled:from-gray-500 disabled:to-gray-600 disabled:cursor-not-allowed
-                         text-white font-bold py-4 px-8 rounded-full text-lg
-                         transform hover:scale-105 transition-all duration-200
-                         flex items-center space-x-3 shadow-lg"
+                type="button"
+                onClick={swapTeams}
+                aria-label="Swap home and away teams"
+                title="Swap home and away"
+                className="mx-auto flex size-11 items-center justify-center rounded-full text-label-2 transition-colors hover:bg-fill hover:text-label"
               >
-                <Zap className="h-6 w-6" />
-                <span>Predict Game Outcome</span>
+                <ArrowLeftRight
+                  aria-hidden="true"
+                  className="size-5 rotate-90 sm:rotate-0 md:rotate-90 lg:rotate-0"
+                />
+              </button>
+              <TeamSelector
+                id="home-team"
+                label="Home"
+                teams={teams}
+                selectedTeam={homeTeam}
+                otherTeam={awayTeam}
+                otherLabel="Away"
+                color={colors.home}
+                onTeamSelect={setHomeId}
+              />
+            </div>
+
+            <div className="grid grid-cols-1 items-end gap-3 xl:grid-cols-[minmax(0,1fr)_11rem]">
+              <ModelSelector
+                models={models}
+                selectedModel={model}
+                recommendedModel={recommendedModel}
+                onModelSelect={handleModelSelect}
+              />
+              <button
+                type="button"
+                onClick={() => predict(model)}
+                disabled={!serverReady || pending}
+                aria-busy={pending}
+                className={`flex min-h-[52px] w-full items-center justify-center gap-2 rounded-xl px-4 font-semibold
+                            transition-[background-color,color,transform] active:scale-[0.99] disabled:active:scale-100
+                            ${serverReady
+                              ? 'bg-tint text-on-tint hover:bg-tint/90 disabled:cursor-progress'
+                              : 'bg-fill text-label-2 cursor-not-allowed'}`}
+              >
+                {(pending || server === 'waking') && <LoadingSpinner />}
+                {predictLabel}
               </button>
             </div>
-          </div>
-        </div>
-      </main>
 
-      {/* Footer */}
-      <footer className="glass-effect border-t border-white/20 mt-auto">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="text-center text-gray-300">
-            <p>Powered by Machine Learning • XGBoost • Random Forest • Logistic Regression</p>
-          </div>
-        </div>
-      </footer>
+            <PredictionResult
+              awayTeam={awayTeam}
+              homeTeam={homeTeam}
+              colors={colors}
+              result={result ?? heldResult}
+              requestedModel={model}
+              stale={pending}
+              error={predictError?.key === resultKey ? predictError.message : null}
+              onRetry={() => predict(model)}
+            />
+          </section>
+
+          <TeamStats
+            awayTeam={awayTeam}
+            homeTeam={homeTeam}
+            colors={colors}
+            awayState={teamStats[awayId]}
+            homeState={teamStats[homeId]}
+            serverReady={serverReady}
+            onRetry={loadStats}
+          />
+        </main>
+      </div>
     </div>
   );
 }

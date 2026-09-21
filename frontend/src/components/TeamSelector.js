@@ -1,59 +1,63 @@
 import { ChevronDown } from 'lucide-react';
 import React from 'react';
 
-const TeamSelector = ({ label, teams, selectedTeam, onTeamSelect, disabled }) => {
+const CONFERENCES = [
+  { key: 'East', label: 'Eastern Conference' },
+  { key: 'West', label: 'Western Conference' },
+];
+
+const byName = (a, b) => a.name.localeCompare(b.name);
+
+// A native select keeps the platform picker on phones and full keyboard
+// support; the color chip mirrors the team's side of the court.
+const TeamSelector = ({ id, label, teams, selectedTeam, otherTeam, otherLabel, color, onTeamSelect }) => {
+  const grouped = CONFERENCES.map((conference) => ({
+    ...conference,
+    teams: teams.filter((team) => team.conference === conference.key).sort(byName),
+  }));
+  const ungrouped = teams.filter((team) => !CONFERENCES.some((c) => c.key === team.conference)).sort(byName);
+
+  const renderOption = (team) => {
+    const takenByOther = team.id === otherTeam?.id;
+    return (
+      <option key={team.id} value={team.id} disabled={takenByOther}>
+        {team.name}{takenByOther ? ` (${otherLabel.toLowerCase()})` : ''}
+      </option>
+    );
+  };
+
   return (
-    <div className="space-y-3">
-      <label className="block text-sm font-medium text-gray-300">
+    <div className="min-w-0">
+      <label htmlFor={id} className="block text-sm font-medium text-label-2 mb-1.5">
         {label}
       </label>
-      
       <div className="relative">
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 size-4 rounded-full ring-1 ring-black/10 transition-colors"
+          style={{ backgroundColor: color }}
+        />
         <select
-          value={selectedTeam?.id || ''}
-          onChange={(e) => {
-            const teamId = parseInt(e.target.value);
-            const team = teams.find(t => t.id === teamId);
-            onTeamSelect(team || null);
-          }}
-          disabled={disabled}
-          className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-white
-                   focus:outline-none focus:ring-2 focus:ring-nba-orange focus:border-transparent
-                   disabled:opacity-50 disabled:cursor-not-allowed
-                   appearance-none cursor-pointer"
+          id={id}
+          value={selectedTeam?.id ?? ''}
+          onChange={(e) => onTeamSelect(Number(e.target.value))}
+          className="w-full h-11 appearance-none truncate rounded-xl bg-fill pl-10 pr-10 text-[1.0625rem] font-medium text-label
+                     cursor-pointer hover:bg-fill/70 transition-colors"
         >
-          <option value="" className="bg-gray-800 text-white">
-            Select {label.toLowerCase()}
-          </option>
-          {teams.map((team) => (
-            <option
-              key={team.id}
-              value={team.id}
-              className="bg-gray-800 text-white"
-            >
-              {team.abbreviation} - {team.name}
-            </option>
-          ))}
+          {grouped.map((conference) =>
+            conference.teams.length > 0 && (
+              <optgroup key={conference.key} label={conference.label}>
+                {conference.teams.map(renderOption)}
+              </optgroup>
+            )
+          )}
+          {ungrouped.map(renderOption)}
         </select>
-        
-        <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400 pointer-events-none" />
+        <ChevronDown
+          aria-hidden="true"
+          className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 size-5 text-label-2"
+        />
       </div>
-      
-      {selectedTeam && (
-        <div className="bg-white/5 rounded-lg p-3">
-          <div className="flex items-center space-x-3">
-            <div className="w-8 h-8 bg-gradient-to-r from-nba-orange to-nba-red rounded-full flex items-center justify-center">
-              <span className="text-white font-bold text-sm">
-                {selectedTeam.abbreviation.charAt(0)}
-              </span>
-            </div>
-            <div>
-              <p className="text-white font-medium">{selectedTeam.abbreviation}</p>
-              <p className="text-gray-300 text-sm">{selectedTeam.name}</p>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

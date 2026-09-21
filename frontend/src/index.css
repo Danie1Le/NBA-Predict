@@ -2,46 +2,147 @@
 @tailwind components;
 @tailwind utilities;
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-
-body {
-  margin: 0;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  min-height: 100vh;
+/* Semantic color tokens, stored as RGB channels for Tailwind (see tailwind.config.js).
+   Dark mode is its own palette: raised surfaces get lighter, and the tint
+   flips to a lighter orange with dark text so it keeps 4.5:1 contrast. */
+:root {
+  color-scheme: light dark;
+  --bg: 244 245 247;
+  --surface: 255 255 255;
+  --raised: 255 255 255;
+  --fill: 236 237 241;
+  --label: 23 24 28;
+  --label-2: 88 92 101;
+  --label-3: 138 141 148;
+  --separator: 226 227 231;
+  --tint: 194 65 12;
+  --on-tint: 255 255 255;
+  --danger: 180 35 24;
+  --warning: 161 98 7;
 }
 
-code {
-  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
-    monospace;
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: 14 15 18;
+    --surface: 26 28 33;
+    --raised: 72 76 86;
+    --fill: 40 43 50;
+    --label: 242 243 245;
+    --label-2: 163 167 176;
+    --label-3: 112 116 125;
+    --separator: 46 49 55;
+    --tint: 251 146 60;
+    --on-tint: 26 14 5;
+    --danger: 248 113 113;
+    --warning: 250 204 21;
+  }
 }
 
-.glass-effect {
-  background: rgba(255, 255, 255, 0.1);
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+@layer base {
+  body {
+    @apply bg-bg text-label antialiased;
+    font-size: 1.0625rem;
+    line-height: 1.47;
+  }
+
+  :focus-visible {
+    outline: 2px solid rgb(var(--tint));
+    outline-offset: 2px;
+  }
 }
 
-.gradient-text {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+/* On tablets and up the page is a single-screen dashboard, so the court
+   takes whatever height is left and keeps its 99:55 shape. 9.25rem leaves
+   room for the percentages above it and the two-line caption below; spare
+   height is split evenly around the group. */
+.court-fit {
+  container-type: inline-size;
 }
 
-.animate-pulse-slow {
-  animation: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+@media (min-width: 768px) {
+  .court-fit {
+    container-type: size;
+    flex: 1 1 0%;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    justify-content: safe center;
+  }
+
+  .court-frame {
+    width: min(100cqw, (100cqh - 9.25rem) * 1.8);
+    margin-inline: auto;
+  }
 }
 
-@keyframes float {
-  0%, 100% { transform: translateY(0px); }
-  50% { transform: translateY(-10px); }
+@keyframes popover-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+  }
 }
 
-.animate-float {
-  animation: float 3s ease-in-out infinite;
+.popover-in {
+  animation: popover-in 160ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  transform-origin: top right;
+}
+
+/* Court: two team-colored layers split at the away team's win probability.
+   --split is set inline (e.g. 18%); 50% sits exactly on the half-court line. */
+.court {
+  position: relative;
+  aspect-ratio: 99 / 55;
+  overflow: hidden;
+  border-radius: 0.75rem;
+  transition: opacity 200ms ease;
+}
+
+.court-layer {
+  position: absolute;
+  inset: 0;
+  transition: background-color 300ms ease;
+}
+
+.court-layer svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.court-layer svg * {
+  vector-effect: non-scaling-stroke;
+}
+
+.court-away {
+  clip-path: inset(0 calc(100% - var(--split)) 0 0);
+  transition: clip-path 700ms cubic-bezier(0.2, 0.8, 0.2, 1), background-color 300ms ease;
+}
+
+.court-seam {
+  position: absolute;
+  inset: 0;
+  transform: translateX(var(--split));
+  transition: transform 700ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  pointer-events: none;
+}
+
+.court-seam::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -1px;
+  width: 2px;
+  background: rgb(var(--surface));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
