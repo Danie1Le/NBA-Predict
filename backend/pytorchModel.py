@@ -113,12 +113,9 @@ def prepare_pytorch_data(X, y, test_size=0.2, random_state=42):
     """
     Prepare data for PyTorch training with proper scaling and tensor conversion.
     """
-    from sklearn.model_selection import train_test_split
-    
-    # Split data
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=test_size, random_state=random_state, stratify=y
-    )
+    # Date-ordered split: rows are sorted by game date, so the tail is the future
+    cut = int(len(X) * (1 - test_size))
+    X_train, X_test, y_train, y_test = X[:cut], X[cut:], y[:cut], y[cut:]
     
     # Scale features
     scaler = StandardScaler()

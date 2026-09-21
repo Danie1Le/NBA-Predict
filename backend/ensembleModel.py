@@ -41,11 +41,9 @@ class NBAEnsemblePredictor:
         print("Training NBA Prediction Ensemble Model...")
         print("="*60)
         
-        # Split data for final evaluation
-        from sklearn.model_selection import train_test_split
-        X_train, X_test, y_train, y_test = train_test_split(
-            X, y, test_size=test_size, random_state=random_state, stratify=y
-        )
+        # Date-ordered split: rows are sorted by game date, so the tail is the future
+        cut = int(len(X) * (1 - test_size))
+        X_train, X_test, y_train, y_test = X[:cut], X[cut:], y[:cut], y[cut:]
         
         # Train traditional ML models
         if self.use_traditional:

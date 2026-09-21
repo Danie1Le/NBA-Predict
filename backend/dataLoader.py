@@ -5,8 +5,8 @@ Data loading and management for NBA Game Predictor
 import pandas as pd
 from typing import Dict, List, Optional, Tuple
 from modelCache import ModelCache
-from preprocessing import load_and_clean_data
-from featureEngineering import create_features
+from preprocessing import current_team_state, load_and_clean_data
+from featureEngineering import MODEL_FEATURES, create_features
 
 
 class DataLoader:
@@ -17,6 +17,7 @@ class DataLoader:
         self.teams_df: Optional[pd.DataFrame] = None
         self.team_map: Optional[Dict] = None
         self.features: Optional[List[str]] = None
+        self.team_state: Optional[pd.DataFrame] = None
         self.model_cache: Optional[ModelCache] = None
     
     def load_teams_data(self, data_dir: str = 'Data') -> Tuple[pd.DataFrame, Dict]:
@@ -32,48 +33,14 @@ class DataLoader:
         return games_df
     
     def get_features_list(self) -> List[str]:
-        """Get the list of features used for predictions"""
-        return [
-            # Core team stats
-            'HOME_PTS_rolling5', 'HOME_FG_PCT_rolling5', 'HOME_FG3_PCT_rolling5', 'HOME_FT_PCT_rolling5',
-            'HOME_REB_rolling5', 'HOME_AST_rolling5', 'HOME_TOV_rolling5',
-            'AWAY_PTS_rolling5', 'AWAY_FG_PCT_rolling5', 'AWAY_FG3_PCT_rolling5', 'AWAY_FT_PCT_rolling5',
-            'AWAY_REB_rolling5', 'AWAY_AST_rolling5', 'AWAY_TOV_rolling5',
-            'HOME_TEAM_ID_WIN_PCT', 'AWAY_TEAM_ID_WIN_PCT',
-            
-            # Key difference features
-            'WIN_PCT_DIFF', 'WIN_PCT_RATIO', 'STRENGTH_ADVANTAGE',
-            'PTS_DIFF', 'FG_PCT_DIFF', 'FG3_PCT_DIFF', 'FT_PCT_DIFF',
-            'REB_DIFF', 'AST_DIFF', 'TOV_DIFF',
-            
-            # Performance metrics
-            'HOME_EFFICIENCY', 'AWAY_EFFICIENCY', 'EFFICIENCY_DIFF',
-            'HOME_MOMENTUM', 'AWAY_MOMENTUM', 'MOMENTUM_DIFF',
-            'HOME_COURT_ADVANTAGE', 'STATS_DOMINANCE', 'TIER_MATCHUP',
-            'HOME_RECENT_FORM', 'AWAY_RECENT_FORM', 'FORM_DIFF', 'CLUTCH_FACTOR',
-            
-            # Advanced features
-            'H2H_ADVANTAGE', 'HOME_DEF_EFFICIENCY', 'AWAY_DEF_EFFICIENCY', 'DEF_EFFICIENCY_DIFF',
-            'HOME_PACE', 'AWAY_PACE', 'PACE_DIFF', 'THREE_POINT_ADVANTAGE',
-            'TURNOVER_MARGIN', 'REBOUNDING_DOMINANCE', 'FT_ADVANTAGE',
-            'HOME_CONSISTENCY', 'AWAY_CONSISTENCY', 'CONSISTENCY_DIFF',
-            
-            # Composite features
-            'HOME_STRENGTH_SCORE', 'AWAY_STRENGTH_SCORE', 'STRENGTH_SCORE_DIFF',
-            'HOME_MOMENTUM_COMPOSITE', 'AWAY_MOMENTUM_COMPOSITE', 'MOMENTUM_COMPOSITE_DIFF',
-            'HOME_CLUTCH_COMPOSITE', 'AWAY_CLUTCH_COMPOSITE', 'CLUTCH_COMPOSITE_DIFF',
-            'HOME_PRESSURE', 'AWAY_PRESSURE', 'PRESSURE_DIFF',
-            'FINAL_COMPOSITE_SCORE',
-            'HOME_VARIANCE', 'AWAY_VARIANCE', 'VARIANCE_DIFF',
-            'WIN_PCT_EFFICIENCY_INTERACTION', 'MOMENTUM_CLUTCH_INTERACTION', 'STRENGTH_PRESSURE_INTERACTION',
-            'HOME_ADVANTAGE_RATIO', 'AWAY_DISADVANTAGE_RATIO', 'ADVANTAGE_DISADVANTAGE_DIFF',
-            'HOME_TREND_ACCELERATION', 'AWAY_TREND_ACCELERATION', 'TREND_ACCELERATION_DIFF',
-            'HOME_OVERALL_STRENGTH', 'AWAY_OVERALL_STRENGTH', 'OVERALL_STRENGTH_DIFF',
-            'HOME_WIN_LIKELIHOOD', 'AWAY_WIN_LIKELIHOOD', 'LIKELIHOOD_DIFF',
-            'HOME_CONSISTENCY_SCORE', 'AWAY_CONSISTENCY_SCORE',
-            'AUC_OPTIMIZED_SCORE'
-        ]
-    
+        """
+        The features the models train on.
+
+        Defined in featureEngineering so that training, evaluation and live
+        predictions cannot drift apart.
+        """
+        return list(MODEL_FEATURES)
+
     async def load_all_data(self, data_dir: str = 'Data', cache_dir: str = 'model_cache') -> bool:
         """Load all data and models"""
         try:
@@ -85,6 +52,10 @@ class DataLoader:
             # Load and process games data
             self.games_df = self.load_games_data(data_dir)
             self.features = self.get_features_list()
+
+            # Each team's form and rating going into their next game, which is
+            # what a prediction for an unscheduled matchup has to work from.
+            self.team_state = current_team_state(f'{data_dir}/NBA_GAMES.csv')
             
             # Load models
             await self.load_models(cache_dir)
@@ -92,6 +63,7 @@ class DataLoader:
             print("✅ Data loaded successfully!")
             print(f"📊 Games: {len(self.games_df) if self.games_df is not None else 0}")
             print(f"🏀 Teams: {len(self.teams_df) if self.teams_df is not None else 0}")
+            print(f"📐 Features: {len(self.features)}")
             print(f"🧠 Models: {len(self.model_cache.models) if self.model_cache else 0}")
             
             return True

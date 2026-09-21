@@ -1,50 +1,65 @@
+"""
+Model definitions and the train/test split.
+
+Every model is a pipeline, so imputation and scaling are fitted on the training
+fold only and travel with the model. evaluate.py uses the same build_model(),
+which is what makes its reported numbers numbers for the shipped models.
+"""
+
 import numpy as np
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.model_selection import train_test_split
+from sklearn.impute import SimpleImputer
 from sklearn.linear_model import LogisticRegression
+from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
+
 try:
     from xgboost import XGBClassifier
 except ImportError:
     XGBClassifier = None
 
-def train_model(X, y, test_size=0.2, random_state=42, model_type='logreg'):
-    """
-    Train a classifier (RandomForest, XGBoost, or Logistic Regression) with hyperparameter tuning to predict NBA game outcomes.
-    Splits data into train/test and returns the best model and test data.
-    model_type: 'rf' (RandomForest), 'xgb' (XGBoost), 'logreg' (Logistic Regression)
-    """
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, random_state=random_state, stratify=y)
-    
-    # Create scaler for models that need feature scaling
-    scaler = StandardScaler()
-    
+MODEL_TYPES = ['logreg', 'rf', 'xgb']
+
+
+def build_model(model_type='logreg', random_state=42):
+    """An unfitted pipeline for one model type."""
+    if model_type == 'logreg':
+        return make_pipeline(
+            SimpleImputer(strategy='median'),
+            StandardScaler(),
+            # Strong regularisation: ~1000 training games and 11 correlated features.
+            LogisticRegression(C=0.3, max_iter=5000, random_state=random_state),
+        )
     if model_type == 'rf':
-        # Fast Random Forest - no grid search (tree-based, doesn't need scaling)
-        model = RandomForestClassifier(n_estimators=100, max_depth=10, random_state=random_state)
-        model.fit(X_train, y_train)
-        print('Trained Random Forest (fast mode)')
-        return model, X_test, y_test
-    elif model_type == 'xgb' and XGBClassifier is not None:
-        # Fast XGBoost - no grid search (tree-based, doesn't need scaling)
-        model = XGBClassifier(n_estimators=100, max_depth=5, learning_rate=0.05, random_state=random_state, eval_metric='logloss')
-        model.fit(X_train, y_train)
-        print('Trained XGBoost (fast mode)')
-        return model, X_test, y_test
-    elif model_type == 'logreg':
-        # Logistic Regression NEEDS feature scaling for proper performance
-        # Clip extreme values before scaling to prevent extreme predictions
-        X_train_clipped = np.clip(X_train, -1000, 1000)  # Clip extreme values
-        X_test_clipped = np.clip(X_test, -1000, 1000)
-        
-        X_train_scaled = scaler.fit_transform(X_train_clipped)
-        X_test_scaled = scaler.transform(X_test_clipped)
-        
-        model = LogisticRegression(C=0.1, max_iter=2000, random_state=random_state, solver='liblinear')
-        model.fit(X_train_scaled, y_train)
-        print('Trained Logistic Regression with feature scaling and clipping (fast mode)')
-        
-        # Return both model and scaler for prediction
-        return (model, scaler), X_test_scaled, y_test
-    else:
-        raise ValueError('Unknown or unavailable model_type: ' + str(model_type)) 
+        return make_pipeline(
+            SimpleImputer(strategy='median'),
+            RandomForestClassifier(n_estimators=400, max_depth=6, min_samples_leaf=20,
+                                   random_state=random_state, n_jobs=-1),
+        )
+    if model_type == 'xgb':
+        if XGBClassifier is None:
+            raise ValueError('xgboost is not installed')
+        return XGBClassifier(n_estimators=250, max_depth=3, learning_rate=0.03,
+                             subsample=0.8, colsample_bytree=0.8, reg_lambda=2.0,
+                             eval_metric='logloss', random_state=random_state)
+    raise ValueError('Unknown model_type: ' + str(model_type))
+
+
+def date_ordered_split(X, y, test_size=0.2):
+    """
+    Split on time, not at random.
+
+    Rows arrive sorted by game date, so the tail is the future. A random split
+    would let the model train on games played after the ones it is tested on.
+    """
+    cut = int(len(X) * (1 - test_size))
+    return X[:cut], X[cut:], y[:cut], y[cut:]
+
+
+def train_model(X, y, test_size=0.2, random_state=42, model_type='logreg'):
+    """Fit one model on the earlier games and return it with the held-out tail."""
+    X_train, X_test, y_train, y_test = date_ordered_split(X, y, test_size)
+    model = build_model(model_type, random_state)
+    model.fit(X_train, y_train)
+    print(f'Trained {model_type} on {len(X_train)} games, holding out {len(X_test)}')
+    return model, X_test, y_test
